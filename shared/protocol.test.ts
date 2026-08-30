@@ -103,6 +103,40 @@ test("odd rows pick up the parity offset, even rows do not", () => {
   assert.equal(cellToViewport(a, 0, 3).x, 0.05, "odd row: staggered half a cell");
 });
 
+test("the serialized basis matches a real Unity board", () => {
+  // Not a simulation. These numbers were measured on a live Dunes board in the
+  // editor: the affine is exactly what TwitchSnapshot.ToJson emitted at its
+  // "0.####" precision, and the expected values are Camera.WorldToViewportPoint
+  // on the same cells at the same camera.
+  //
+  // The simulation above proves the maths is self-consistent; this proves the
+  // C# publisher and this TS reader actually agree about a specific board. It
+  // is the only test here that would catch the two drifting apart.
+  const a: Affine = [0.277, 0.7482, 0.1694, 0, 0, 0.2259, 0, 0, 0.0847, 0];
+
+  // Wr.x = 0.0847 is half of U.x = 0.1694 -- the half-cell stagger on odd rows,
+  // the term a six-float affine has nowhere to put.
+  const unity: Array<[number, number, number, number]> = [
+    [0, 0, 0.276985317, 0.7482353],
+    [1, 0, 0.4463971, 0.7482353],
+    [0, 1, 0.361691177, 0.9741176],
+    [7, 3, 1.54757345, 1.42588234],
+    [10, 10, 1.9711026, 3.00705862],
+    [-3, 5, -0.146544039, 1.87764692],   // off-board: parity must hold for negatives
+  ];
+
+  let worstPx = 0;
+  for (const [q, r, x, y] of unity) {
+    const got = cellToViewport(a, q, r);
+    worstPx = Math.max(worstPx, Math.abs(got.x - x) * 1920, Math.abs(got.y - y) * 1080);
+  }
+
+  // Sub-pixel. The residual is the 4dp quantisation of U and V multiplied by the
+  // cell index, which is why it grows towards the far corner rather than being
+  // uniform. A hex is ~50px across at typical zoom, so this is invisible.
+  assert.ok(worstPx < 0.5, `worst disagreement with Unity was ${worstPx.toFixed(4)}px`);
+});
+
 test("the five-probe basis reproduces a real hex layout exactly", () => {
   // Simulate Unity: pointy-top hex cell->world, then an orthographic camera.
   // This is the regression test for the parity bug -- a three-probe affine fit
