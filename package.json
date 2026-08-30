@@ -3,9 +3,15 @@
   "private": true,
   "version": "0.1.0",
   "description": "Twitch extension for Atlas Conquest - lets viewers hover the stream to inspect cards.",
-  "workspaces": ["frontend", "ebs"],
+  "workspaces": [
+    "frontend",
+    "ebs"
+  ],
   "scripts": {
     "test": "node --test shared/*.test.ts frontend/src/*.test.ts"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.13.3"
+  }
 }

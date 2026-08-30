@@ -49,6 +49,30 @@ const PUBLISH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 90;
 const lastSendByChannel = new Map<string, number>();
 const MIN_SEND_INTERVAL_MS = 900;
 
+/**
+ * Whether each channel is currently streaming, cached per isolate.
+ *
+ * A video-overlay extension only renders over live video, so a snapshot sent
+ * while the channel is offline has no possible audience — it is pure cost. The
+ * game client cannot know this on its own: it has no idea whether OBS is
+ * running, and a linked streamer playing offline would otherwise post ~1,500
+ * requests an hour to nobody.
+ *
+ * Asymmetric TTLs on purpose. Going live is the transition a viewer notices —
+ * the overlay stays dead until we spot it — so a stale "offline" is re-checked
+ * quickly. A stale "live" only costs a few wasted relays, so it is held longer.
+ */
+interface LiveState { live: boolean; checkedAt: number }
+const liveByChannel = new Map<string, LiveState>();
+const LIVE_TTL_MS = 60_000;
+const OFFLINE_TTL_MS = 20_000;
+
+/** How long the client should wait before trying again while we are paused. */
+const OFFLINE_RETRY_MS = 30_000;
+
+/** App access token for the Helix stream lookup. Valid ~60 days; refreshed early. */
+let appToken: { token: string; expiresAt: number } | null = null;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -82,11 +106,17 @@ async function handleSnapshot(request: Request, env: Env): Promise<Response> {
     return json({ error: "token revoked" }, 401);
   }
 
-  const body = await request.text();
-
   // The channel comes from the verified token, never from the body — otherwise a
   // streamer with a valid token could broadcast onto someone else's channel.
   const channelId = claims.channelId;
+
+  // Nobody can see an overlay on an offline channel. Tell the client to back off
+  // rather than relaying into the void. Checked before the body is even read.
+  if (!(await isChannelLive(channelId, env))) {
+    return json({ ok: true, paused: true, retryAfterMs: OFFLINE_RETRY_MS }, 202);
+  }
+
+  const body = await request.text();
 
   const now = Date.now();
   const last = lastSendByChannel.get(channelId) ?? 0;
@@ -181,6 +211,60 @@ async function sendToPubSub(
 
   if (res.ok) return { ok: true };
   return { ok: false, status: res.status, detail: await res.text() };
+}
+
+// --- live check -------------------------------------------------------------
+
+/**
+ * Is this channel streaming right now?
+ *
+ * Fails OPEN. If Twitch is unreachable or rate-limits us, assume live and relay
+ * as normal: a few wasted messages cost far less than a streamer's overlay going
+ * dark because a side lookup failed.
+ */
+async function isChannelLive(channelId: string, env: Env): Promise<boolean> {
+  const now = Date.now();
+  const cached = liveByChannel.get(channelId);
+  if (cached) {
+    const ttl = cached.live ? LIVE_TTL_MS : OFFLINE_TTL_MS;
+    if (now - cached.checkedAt < ttl) return cached.live;
+  }
+
+  try {
+    const token = await getAppToken(env);
+    const res = await fetch(
+      `https://api.twitch.tv/helix/streams?user_id=${encodeURIComponent(channelId)}`,
+      { headers: { Authorization: `Bearer ${token}`, "Client-Id": env.TWITCH_CLIENT_ID } },
+    );
+    if (!res.ok) return true;
+
+    const body = await res.json<{ data?: unknown[] }>();
+    const live = Array.isArray(body.data) && body.data.length > 0;
+    liveByChannel.set(channelId, { live, checkedAt: now });
+    return live;
+  } catch {
+    return true;
+  }
+}
+
+async function getAppToken(env: Env): Promise<string> {
+  // Refresh a minute early so a token never expires mid-request.
+  if (appToken && appToken.expiresAt > Date.now() + 60_000) return appToken.token;
+
+  const res = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: env.TWITCH_CLIENT_ID,
+      client_secret: env.TWITCH_CLIENT_SECRET,
+      grant_type: "client_credentials",
+    }),
+  });
+  if (!res.ok) throw new Error("app token request failed");
+
+  const body = await res.json<{ access_token: string; expires_in: number }>();
+  appToken = { token: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
+  return appToken.token;
 }
 
 // --- tokens -----------------------------------------------------------------

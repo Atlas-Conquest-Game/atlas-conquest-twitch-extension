@@ -52,6 +52,16 @@ off by a second or two, nudge this first.
 your stream — including an opponent — gets your full list. Turn it on for casual
 or educational streams; leave it off for ranked or tournament play.
 
+### It only runs while you're live
+
+The overlay publishes during a match, and only when your channel is actually
+streaming. If you're playing offline the game notices and stays quiet, so
+linking your account once doesn't mean sending data every time you play.
+
+There's a switch in `Settings → Twitch` if you want it off while live. It shows
+the current state: *On*, *Off*, or *On (waiting for stream)* when you're linked
+and playing but not broadcasting.
+
 ### What viewers never see
 
 Only your own information is ever published. Your opponent's hand isn't hidden
@@ -62,7 +72,9 @@ so there is nothing to leak.
 
 **Nothing appears.** Check the extension is activated as an *overlay* (not a
 panel) in your Twitch dashboard, and that the game shows your channel as linked
-under `Settings → Twitch`.
+under `Settings → Twitch`. If that row reads *waiting for stream* while you are
+in fact live, give it half a minute: the game re-checks periodically rather than
+on every action.
 
 **Hover targets are offset from the board.** Your stream delay setting is off.
 Increase it if the overlay leads the video, decrease if it lags.
