@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applySnapshot, emptyBoard, isMoving, cellToViewport, hexRadius,
+  mergeIntervals, estimateClockSkew,
   type Snapshot, type Affine,
 } from "./protocol.ts";
 
-const IDENTITY: Affine = [1, 0, 0, 1, 0, 0];
+// O=(0,0)  U=(1,0)  V=(0,1)  no parity offsets
+const IDENTITY: Affine = [0, 0, 1, 0, 0, 1, 0, 0, 0, 0];
 
 function keyframe(seq: number, entities: number[][] = []): Snapshot {
   return { v: 1, t: 1000 + seq, s: seq, k: 1, a: IDENTITY, e: entities as any };
@@ -88,14 +90,108 @@ test("an open interval blanks indefinitely until closed", () => {
 
 // --- projection -------------------------------------------------------------
 
-test("cellToViewport applies the affine", () => {
-  const a: Affine = [0.1, 0.05, 0.0, 0.08, 0.5, 0.5];
-  assert.deepEqual(cellToViewport(a, 2, 3), { x: 0.1 * 2 + 0.05 * 3 + 0.5, y: 0.08 * 3 + 0.5 });
+test("cellToViewport applies the linear part", () => {
+  const a: Affine = [0.5, 0.5, 0.1, 0.0, 0.0, 0.08, 0, 0, 0, 0];
+  assert.deepEqual(cellToViewport(a, 2, 3), { x: 0.5 + 0.2, y: 0.5 + 0.24 });
+});
+
+test("odd rows pick up the parity offset, even rows do not", () => {
+  // Wr = (0.05, 0). This is the half-cell stagger that a plain affine cannot
+  // express, and getting it wrong put hitboxes ~900px out at the board edges.
+  const a: Affine = [0, 0, 0.1, 0, 0, 0.08, 0, 0, 0.05, 0];
+  assert.equal(cellToViewport(a, 0, 2).x, 0.0, "even row: no stagger");
+  assert.equal(cellToViewport(a, 0, 3).x, 0.05, "odd row: staggered half a cell");
+});
+
+test("the five-probe basis reproduces a real hex layout exactly", () => {
+  // Simulate Unity: pointy-top hex cell->world, then an orthographic camera.
+  // This is the regression test for the parity bug -- a three-probe affine fit
+  // to the same board is out by hundreds of pixels toward the edges.
+  const cell = (q: number, r: number) => ({
+    x: q * 1.0 + (q & 1 ? 0 : 0) + (r & 1 ? 0.5 : 0),
+    y: r * 0.75,
+  });
+  const cam = { cx: 1.3, cy: -2.1, S: 4.2, A: 16 / 9 };
+  const project = (q: number, r: number) => {
+    const w = cell(q, r);
+    return { x: (w.x - cam.cx) / (2 * cam.S * cam.A) + 0.5, y: (w.y - cam.cy) / (2 * cam.S) + 0.5 };
+  };
+
+  // Solve exactly as TwitchBroadcastPublisher.SolveProjection does.
+  const p00 = project(0, 0), p20 = project(2, 0), p02 = project(0, 2);
+  const p10 = project(1, 0), p01 = project(0, 1);
+  const ux = (p20.x - p00.x) / 2, uy = (p20.y - p00.y) / 2;
+  const vx = (p02.x - p00.x) / 2, vy = (p02.y - p00.y) / 2;
+  const basis: Affine = [
+    p00.x, p00.y, ux, uy, vx, vy,
+    p10.x - p00.x - ux, p10.y - p00.y - uy,
+    p01.x - p00.x - vx, p01.y - p00.y - vy,
+  ];
+
+  let worstPx = 0;
+  for (let q = -8; q <= 8; q++) {
+    for (let r = -8; r <= 8; r++) {
+      const got = cellToViewport(basis, q, r);
+      const want = project(q, r);
+      worstPx = Math.max(worstPx, Math.abs(got.x - want.x) * 1920, Math.abs(got.y - want.y) * 1080);
+    }
+  }
+  assert.ok(worstPx < 0.001, `worst error ${worstPx}px across the board should be ~0`);
 });
 
 test("hexRadius scales with zoom instead of being sent separately", () => {
-  const near: Affine = [0.2, 0, 0, 0.2, 0.5, 0.5];
-  const far: Affine  = [0.1, 0, 0, 0.1, 0.5, 0.5];
+  const near: Affine = [0.5, 0.5, 0.2, 0, 0, 0.2, 0, 0, 0, 0];
+  const far: Affine  = [0.5, 0.5, 0.1, 0, 0, 0.1, 0, 0, 0, 0];
   assert.ok(hexRadius(near) > hexRadius(far));
   assert.equal(hexRadius(near), 0.1);
+});
+
+// --- interval merging -------------------------------------------------------
+
+test("an open interval is replaced, not duplicated, when re-sent", () => {
+  // The publisher re-sends the same open interval every snapshot until the
+  // camera settles. Appending would pile up duplicates of a span that never ends.
+  let held = mergeIntervals([], [[1000, null]]);
+  held = mergeIntervals(held, [[1000, null]]);
+  held = mergeIntervals(held, [[1000, null]]);
+  assert.equal(held.length, 1);
+});
+
+test("closing an interval clears the open-ended version", () => {
+  let held = mergeIntervals([], [[1000, null]]);
+  held = mergeIntervals(held, [[1000, 1600]]);
+  assert.deepEqual(held, [[1000, 1600]]);
+  assert.equal(isMoving(held, 5000, 0), false,
+    "hitboxes must come back after the pan ends");
+});
+
+test("distinct pans accumulate", () => {
+  let held = mergeIntervals([], [[1000, 1200]]);
+  held = mergeIntervals(held, [[3000, 3400]]);
+  assert.equal(held.length, 2);
+  assert.equal(isMoving(held, 1100, 0), true);
+  assert.equal(isMoving(held, 2000, 0), false);
+  assert.equal(isMoving(held, 3200, 0), true);
+});
+
+test("intervals too old to matter are dropped", () => {
+  const held = mergeIntervals([[1000, 1200]], [[90_000, 90_500]], 100_000, 60_000);
+  assert.deepEqual(held, [[90_000, 90_500]]);
+});
+
+test("an open interval survives pruning regardless of age", () => {
+  const held = mergeIntervals([[1000, null]], [], 100_000, 60_000);
+  assert.equal(held.length, 1, "still moving; dropping it would un-blank hitboxes mid-pan");
+});
+
+// --- clock skew -------------------------------------------------------------
+
+test("skew estimate ignores a single delayed message", () => {
+  // Snapshot stamps come from the streamer's clock, which may disagree with the
+  // viewer's by any amount. Four samples agreeing on ~500ms, one outlier at 9s.
+  assert.equal(estimateClockSkew([500, 505, 495, 9000, 500]), 500);
+});
+
+test("no samples means assume no skew", () => {
+  assert.equal(estimateClockSkew([]), 0);
 });

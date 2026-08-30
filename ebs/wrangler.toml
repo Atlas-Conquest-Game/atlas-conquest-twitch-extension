@@ -1,0 +1,16 @@
+name = "atlas-conquest-ebs"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Revoked publish tokens. Written only when a streamer unlinks, never read on the
+# snapshot path -- auth is a self-contained signed token, so the hot path does no
+# storage I/O at all.
+[[kv_namespaces]]
+binding = "REVOCATIONS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Secrets are set out of band, never committed:
+#   npx wrangler secret put TWITCH_EXTENSION_SECRET
+#   npx wrangler secret put TWITCH_CLIENT_ID
+#   npx wrangler secret put TWITCH_OWNER_ID
+#   npx wrangler secret put PUBLISH_TOKEN_SECRET

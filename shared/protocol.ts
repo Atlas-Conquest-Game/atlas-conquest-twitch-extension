@@ -37,18 +37,39 @@ export const E = { Handle: 0, CardId: 1, Q: 2, R: 3, Health: 4, Owner: 5 } as co
 export type MotionInterval = [number, number | null];
 
 /**
- * Cell -> viewport affine transform, [a00, a01, a10, a11, bx, by].
+ * Cell -> viewport projection basis, as
+ * `[ox,oy, ux,uy, vx,vy, wqx,wqy, wrx,wry]`.
  *
- * The board camera is orthographic and Unity's hex cell->world map is linear, so
- * the composition of the two is exactly affine. Six floats therefore place every
- * hex on screen at any pan or zoom, and the frontend never has to reimplement
- * Unity's hex layout.
+ * NOT a plain affine transform, and this is the subtle part. Unity's hex grid
+ * offsets odd rows (pointy-top) or odd columns (flat-top) by half a cell. That
+ * term is *periodic*, not linear, so a 2x2 matrix plus translation cannot express
+ * it: fitting one to a real board leaves hitboxes up to ~900px out at the edges.
+ *
+ * The fix is to carry the parity offsets explicitly:
+ *
+ *     viewport = O + q*U + r*V + (q&1)*Wq + (r&1)*Wr
+ *
+ * The publisher solves this by projecting five probe cells -- (0,0), (2,0),
+ * (0,2), (1,0), (0,1) -- through Unity's own CellToWorld and the live camera.
+ * Even probes recover the linear part, odd ones recover the parity offsets.
+ * Exact to floating point, for either hex orientation, and it stays correct if
+ * the grid's cell size or swizzle ever changes, because nothing about the layout
+ * is assumed -- it is measured.
+ *
+ * Wq or Wr is zero for whichever axis has no offset, so the same ten floats also
+ * cover a plain square grid.
  *
  * Only sent when the camera has *settled* and the value changed. Mid-motion
  * values are never rendered (hitboxes are hidden while the camera moves), so
  * sending them would be pure waste.
  */
-export type Affine = [number, number, number, number, number, number];
+export type Affine = [
+  number, number,  // O  - origin
+  number, number,  // U  - one step in q
+  number, number,  // V  - one step in r
+  number, number,  // Wq - extra offset on odd q
+  number, number,  // Wr - extra offset on odd r
+];
 
 export interface Snapshot {
   /** Protocol version. */
@@ -110,7 +131,12 @@ export function applySnapshot(prev: BoardState, snap: Snapshot): BoardState | nu
 
 /** Project a hex cell to viewport space (0..1, y up, matching Unity). */
 export function cellToViewport(a: Affine, q: number, r: number): { x: number; y: number } {
-  return { x: a[0] * q + a[1] * r + a[4], y: a[2] * q + a[3] * r + a[5] };
+  const oddQ = q & 1;
+  const oddR = r & 1;
+  return {
+    x: a[0] + q * a[2] + r * a[4] + oddQ * a[6] + oddR * a[8],
+    y: a[1] + q * a[3] + r * a[5] + oddQ * a[7] + oddR * a[9],
+  };
 }
 
 /**
@@ -120,8 +146,8 @@ export function cellToViewport(a: Affine, q: number, r: number): { x: number; y:
  * size field would be redundant (and could disagree with the transform).
  */
 export function hexRadius(a: Affine): number {
-  const stepQ = Math.hypot(a[0], a[2]);
-  const stepR = Math.hypot(a[1], a[3]);
+  const stepQ = Math.hypot(a[2], a[3]);   // U
+  const stepR = Math.hypot(a[4], a[5]);   // V
   return Math.min(stepQ, stepR) * 0.5;
 }
 
@@ -144,4 +170,49 @@ export function isMoving(intervals: MotionInterval[], t: number, lead = 100): bo
     if (t >= start - lead && (end === null || t <= end)) return true;
   }
   return false;
+}
+
+/**
+ * Fold newly received intervals into the ones already held.
+ *
+ * Upsert by `start`, never append: while the camera is still moving the publisher
+ * re-sends the same open interval in every snapshot, and closes it only once the
+ * camera settles. Appending would accumulate a duplicate per snapshot and, worse,
+ * would keep the stale open-ended copy forever — so hitboxes would never come
+ * back after the first long pan.
+ *
+ * Intervals older than `keepMs` behind `now` are dropped; they can no longer
+ * intersect anything the delay buffer will render.
+ */
+export function mergeIntervals(
+  existing: MotionInterval[],
+  incoming: MotionInterval[],
+  now = 0,
+  keepMs = 60_000,
+): MotionInterval[] {
+  const byStart = new Map<number, MotionInterval>();
+  for (const interval of existing) byStart.set(interval[0], interval);
+  for (const interval of incoming) byStart.set(interval[0], interval);
+
+  return [...byStart.values()]
+    .filter(([start, end]) => end === null || end >= now - keepMs)
+    .sort((a, b) => a[0] - b[0]);
+}
+
+/**
+ * Estimate how far this browser's clock sits ahead of the publisher's.
+ *
+ * Snapshot timestamps come from the streamer's machine, whose clock may disagree
+ * with the viewer's by an arbitrary amount -- and the whole delay mechanism is
+ * built on comparing the two. Network transit is small next to a 3-20s stream
+ * delay, so arrival-minus-stamp is a good estimate of the offset.
+ *
+ * The median rather than the mean, because a single delayed message would drag an
+ * average and leave every hitbox misplaced for as long as it stayed in the window.
+ */
+export function estimateClockSkew(samples: number[]): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }

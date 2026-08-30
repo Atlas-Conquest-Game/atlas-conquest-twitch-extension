@@ -1,0 +1,72 @@
+/* The overlay sits on top of live video, so everything here is either fully
+   transparent or deliberately high-contrast against unknown pixels. */
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  /* The iframe covers the whole player. Only the hitboxes and panel accept
+     input; everything else must fall through to Twitch's own controls. */
+  pointer-events: none;
+  background: transparent;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.ac-overlay { position: absolute; inset: 0; }
+
+.ac-hit {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+/* Only a faint tint on hover: the viewer is watching gameplay, and the card
+   panel is the real feedback. */
+.ac-hit:hover { background: rgba(255, 255, 255, 0.16); }
+.ac-hit:focus-visible { outline: 2px solid #ffcc44; outline-offset: 2px; }
+
+/* Hitboxes are removed from the DOM while the camera moves rather than hidden,
+   so there is nothing here to fade -- this only softens their return. */
+.ac-overlay[data-moving="true"] .ac-hit { pointer-events: none; }
+
+.ac-card {
+  position: absolute;
+  bottom: 8%;
+  width: min(300px, 26%);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(14, 12, 20, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  color: #f2efe9;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ac-card[data-pinned="true"] {
+  pointer-events: auto;
+  cursor: pointer;
+  border-color: rgba(255, 204, 68, 0.7);
+}
+
+.ac-card-art { width: 100%; border-radius: 6px; display: block; }
+.ac-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ac-card-name { font-weight: 600; font-size: 15px; }
+.ac-card-cost { color: #6fd3ff; font-weight: 700; }
+.ac-card-stats { display: flex; gap: 10px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.ac-card-text { margin: 0; }
+.ac-card-reminder { margin: 0; opacity: 0.65; font-style: italic; font-size: 12px; }
+.ac-card-hint { text-align: center; opacity: 0.5; font-size: 11px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-hit { transition: none; }
+}
