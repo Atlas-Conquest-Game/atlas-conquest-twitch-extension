@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+.dev.vars
+.wrangler/
+
+# cdn/art is generated: sync.sh --extension downscales the card screenshots from
+# the game repo into it. It IS committed (GitHub Pages serves it), but never
+# hand-edited.
