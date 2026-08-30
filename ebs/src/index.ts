@@ -15,9 +15,18 @@
  */
 
 export interface Env {
-  /** From the Twitch developer console. Signs the JWT that authorises a PubSub send. */
+  /**
+   * The extension's *shared secret*, from Extension Settings > Extension Client
+   * Configuration. Base64. Signs the JWT that authorises a PubSub send.
+   *
+   * This is not the OAuth client secret below. The console offers two unrelated
+   * credentials under similar names, they are not interchangeable, and swapping
+   * them fails with a plain 401 that names neither.
+   */
   TWITCH_EXTENSION_SECRET: string;
   TWITCH_CLIENT_ID: string;
+  /** OAuth client secret for the same client id. Used only by the link flow. */
+  TWITCH_CLIENT_SECRET: string;
   /** The extension owner's user id, required in the `external` role JWT. */
   TWITCH_OWNER_ID: string;
   /** Our own secret for the publish tokens we issue to game clients. Not Twitch's. */
@@ -115,7 +124,7 @@ async function handleLink(request: Request, env: Env): Promise<Response> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: env.TWITCH_CLIENT_ID,
-      client_secret: env.TWITCH_EXTENSION_SECRET,
+      client_secret: env.TWITCH_CLIENT_SECRET,
       code,
       grant_type: "authorization_code",
       redirect_uri: redirectUri,

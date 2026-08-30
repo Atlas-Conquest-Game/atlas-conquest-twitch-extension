@@ -10,7 +10,8 @@ binding = "REVOCATIONS"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
 # Secrets are set out of band, never committed:
-#   npx wrangler secret put TWITCH_EXTENSION_SECRET
+#   npx wrangler secret put TWITCH_EXTENSION_SECRET   # shared secret, base64
 #   npx wrangler secret put TWITCH_CLIENT_ID
+#   npx wrangler secret put TWITCH_CLIENT_SECRET      # OAuth secret, NOT the above
 #   npx wrangler secret put TWITCH_OWNER_ID
 #   npx wrangler secret put PUBLISH_TOKEN_SECRET

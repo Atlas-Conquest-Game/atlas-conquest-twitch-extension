@@ -139,8 +139,20 @@ with a secret shared between Twitch and the extension owner, so that secret can
 never be distributed. Anyone holding it could forge tokens for any channel. That
 is also why there's one hosted EBS rather than one per streamer.
 
-Configure `ebs/wrangler.toml`, set `TWITCH_EXTENSION_SECRET`, `TWITCH_CLIENT_ID`
-and `TWITCH_OWNER_ID` as secrets, then `npx wrangler deploy`.
+Configure `ebs/wrangler.toml`, then set four secrets and deploy:
+
+```bash
+npx wrangler secret put TWITCH_EXTENSION_SECRET   # shared secret (base64), signs PubSub JWTs
+npx wrangler secret put TWITCH_CLIENT_ID
+npx wrangler secret put TWITCH_CLIENT_SECRET      # OAuth secret, a different credential
+npx wrangler secret put TWITCH_OWNER_ID
+npx wrangler secret put PUBLISH_TOKEN_SECRET      # ours, not Twitch's
+npx wrangler deploy
+```
+
+`TWITCH_EXTENSION_SECRET` and `TWITCH_CLIENT_SECRET` are two different values
+that the console presents under similar names. The shared secret signs JWTs; the
+OAuth secret exchanges authorization codes. Swapping them yields a bare 401.
 
 ### Card art
 
