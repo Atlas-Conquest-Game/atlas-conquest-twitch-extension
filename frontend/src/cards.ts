@@ -32,8 +32,13 @@ export interface CardDatabase {
   artUrl(card: CardData): string;
 }
 
-const DEFAULT_CDN =
-  "https://atlas-conquest-game.github.io/atlas-conquest-twitch-extension/cdn";
+// Served from the repo root by GitHub Pages, on a subdomain of the game's own
+// domain. The apex belongs to the website -- Pages allows one repository per
+// custom domain, so the two cannot share it.
+//
+// This host is baked into the extension's Twitch allowlist. Changing it means a
+// new extension version and another review pass, so it is not a casual edit.
+const DEFAULT_CDN = "https://cdn.atlas-conquest.com";
 
 export async function loadCards(cdnBase = DEFAULT_CDN): Promise<CardDatabase> {
   const res = await fetch(`${cdnBase}/data/cards.json`);

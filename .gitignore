@@ -5,6 +5,6 @@ dist/
 .dev.vars
 .wrangler/
 
-# cdn/art is generated: sync.sh --extension downscales the card screenshots from
-# the game repo into it. It IS committed (GitHub Pages serves it), but never
-# hand-edited.
+# art/ and data/ are generated: sync.sh --extension downscales the card
+# screenshots from the game repo into them. They ARE committed (GitHub Pages
+# serves them from the repo root), but are never hand-edited.
