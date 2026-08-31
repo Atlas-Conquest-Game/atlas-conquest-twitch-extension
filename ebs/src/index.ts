@@ -24,8 +24,25 @@ export interface Env {
    * them fails with a plain 401 that names neither.
    */
   TWITCH_EXTENSION_SECRET: string;
+  /** The extension's client id. Identifies us on the PubSub broadcast call. */
   TWITCH_CLIENT_ID: string;
-  /** OAuth client secret for the same client id. Used only by the link flow. */
+  /**
+   * Client id used for *user authorization* — the link flow, the helix/users
+   * lookup, and the app token behind the live check.
+   *
+   * Optional, and it exists because the two are not always the same thing. An
+   * extension can only be authorized against if its console panel exposes OAuth
+   * redirect URIs; where it does not, the redirect URIs live on a separate
+   * registered Application, which then has its own client id and secret. Leave
+   * this unset and everything falls back to TWITCH_CLIENT_ID, which is correct
+   * for the single-registration case.
+   *
+   * The pairing is what matters: a Twitch call's Client-Id header must match the
+   * client that issued the token it carries. Mixing them is a 401 that names
+   * neither.
+   */
+  TWITCH_OAUTH_CLIENT_ID?: string;
+  /** OAuth client secret, belonging to whichever client id authorizes users. */
   TWITCH_CLIENT_SECRET: string;
   /** The extension owner's user id, required in the `external` role JWT. */
   TWITCH_OWNER_ID: string;
@@ -153,7 +170,7 @@ async function handleLink(request: Request, env: Env): Promise<Response> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: env.TWITCH_CLIENT_ID,
+      client_id: oauthClientId(env),
       client_secret: env.TWITCH_CLIENT_SECRET,
       code,
       grant_type: "authorization_code",
@@ -165,7 +182,7 @@ async function handleLink(request: Request, env: Env): Promise<Response> {
   const { access_token } = await tokenRes.json<{ access_token: string }>();
 
   const userRes = await fetch("https://api.twitch.tv/helix/users", {
-    headers: { Authorization: `Bearer ${access_token}`, "Client-Id": env.TWITCH_CLIENT_ID },
+    headers: { Authorization: `Bearer ${access_token}`, "Client-Id": oauthClientId(env) },
   });
   if (!userRes.ok) return json({ error: "could not identify channel" }, 401);
 
@@ -213,6 +230,13 @@ async function sendToPubSub(
   return { ok: false, status: res.status, detail: await res.text() };
 }
 
+/**
+ * Client id for user-authorization calls. See Env.TWITCH_OAUTH_CLIENT_ID.
+ */
+function oauthClientId(env: Env): string {
+  return env.TWITCH_OAUTH_CLIENT_ID || env.TWITCH_CLIENT_ID;
+}
+
 // --- live check -------------------------------------------------------------
 
 /**
@@ -234,7 +258,7 @@ async function isChannelLive(channelId: string, env: Env): Promise<boolean> {
     const token = await getAppToken(env);
     const res = await fetch(
       `https://api.twitch.tv/helix/streams?user_id=${encodeURIComponent(channelId)}`,
-      { headers: { Authorization: `Bearer ${token}`, "Client-Id": env.TWITCH_CLIENT_ID } },
+      { headers: { Authorization: `Bearer ${token}`, "Client-Id": oauthClientId(env) } },
     );
     if (!res.ok) return true;
 
@@ -255,7 +279,7 @@ async function getAppToken(env: Env): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: env.TWITCH_CLIENT_ID,
+      client_id: oauthClientId(env),
       client_secret: env.TWITCH_CLIENT_SECRET,
       grant_type: "client_credentials",
     }),

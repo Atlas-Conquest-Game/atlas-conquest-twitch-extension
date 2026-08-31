@@ -13,5 +13,9 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 #   npx wrangler secret put TWITCH_EXTENSION_SECRET   # shared secret, base64
 #   npx wrangler secret put TWITCH_CLIENT_ID
 #   npx wrangler secret put TWITCH_CLIENT_SECRET      # OAuth secret, NOT the above
+#
+# Only if user authorization runs through a separate registered Application
+# (because the extension panel exposes no OAuth redirect URIs):
+#   npx wrangler secret put TWITCH_OAUTH_CLIENT_ID    # that Application's client id
 #   npx wrangler secret put TWITCH_OWNER_ID
 #   npx wrangler secret put PUBLISH_TOKEN_SECRET
