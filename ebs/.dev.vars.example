@@ -1,0 +1,38 @@
+# Template for local development only. Copy to .dev.vars and fill in.
+#
+#   cp .dev.vars.example .dev.vars
+#
+# .dev.vars is gitignored and must stay that way. It is the ONLY place real
+# secret values ever sit on disk.
+#
+# You do not need this file to deploy. `wrangler deploy` uses the secrets already
+# stored in Cloudflare, so a second machine needs `wrangler login` and nothing
+# else. This exists solely for `wrangler dev`, which runs the Worker locally and
+# therefore has no Cloudflare-side secrets to read.
+#
+# The alternative to filling this in is `wrangler dev --remote`, which executes
+# on Cloudflare against the real stored secrets. Slower to reload, but nothing
+# sensitive touches the machine.
+
+# The extension's shared secret, base64, from Extension Client Configuration.
+# Signs the JWT authorising a PubSub broadcast.
+TWITCH_EXTENSION_SECRET=
+
+# The extension's client id. Identifies us on the PubSub call.
+TWITCH_CLIENT_ID=
+
+# Only if user authorization runs through a separately registered Application
+# because the extension panel exposes no OAuth redirect URIs. Leave blank to fall
+# back to TWITCH_CLIENT_ID.
+TWITCH_OAUTH_CLIENT_ID=
+
+# OAuth client secret, belonging to whichever client id authorizes users above.
+# A different credential from TWITCH_EXTENSION_SECRET despite the similar name.
+TWITCH_CLIENT_SECRET=
+
+# The extension owner's Twitch user id.
+TWITCH_OWNER_ID=
+
+# Ours, not Twitch's. Signs the publish tokens issued to game clients.
+# Generate with: python -c "import secrets;print(secrets.token_urlsafe(32))"
+PUBLISH_TOKEN_SECRET=
