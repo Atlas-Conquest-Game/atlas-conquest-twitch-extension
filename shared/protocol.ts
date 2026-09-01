@@ -216,3 +216,64 @@ export function estimateClockSkew(samples: number[]): number {
   const mid = sorted.length >> 1;
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
+
+// --- broadcaster configuration ----------------------------------------------
+
+/**
+ * Settings the streamer controls, stored in Twitch's Configuration Service.
+ *
+ * Twitch hosts this, so our EBS never sees or stores it — the config page writes
+ * the broadcaster segment directly and the overlay reads it back on authorize.
+ * Both sides live in this repo but run in different iframes, which is exactly the
+ * kind of gap where two copies of a shape drift apart, so the shape lives here.
+ */
+export interface BroadcasterConfig {
+  /** How far behind live the viewer's video is, in milliseconds. */
+  delayMs: number;
+  /** Whether hovering characters on the board is enabled. */
+  boardHover: boolean;
+}
+
+export const DEFAULT_CONFIG: BroadcasterConfig = {
+  delayMs: 4000,
+  boardHover: true,
+};
+
+/** Widest delay the slider offers. Twitch's own delay tops out around 20s. */
+export const MAX_DELAY_MS = 20_000;
+
+/**
+ * Read a stored config, falling back per-field rather than wholesale.
+ *
+ * A config written by a newer version, or hand-edited, or truncated, must not
+ * take the overlay down — an overlay with a wrong delay is still usable, while
+ * one that threw during setup shows the viewer nothing at all. So anything
+ * unparseable degrades to the default for that field alone.
+ */
+export function parseBroadcasterConfig(raw: string | undefined | null): BroadcasterConfig {
+  if (!raw) return { ...DEFAULT_CONFIG };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
+  if (typeof parsed !== "object" || parsed === null) return { ...DEFAULT_CONFIG };
+
+  const source = parsed as Partial<BroadcasterConfig>;
+  return {
+    delayMs: clampDelay(source.delayMs),
+    boardHover: typeof source.boardHover === "boolean" ? source.boardHover : DEFAULT_CONFIG.boardHover,
+  };
+}
+
+/**
+ * A delay outside the plausible range is worse than the default: a negative one
+ * would render snapshots that have not happened yet, and an enormous one would
+ * park the overlay before the match began.
+ */
+export function clampDelay(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_CONFIG.delayMs;
+  return Math.min(Math.max(Math.round(value), 0), MAX_DELAY_MS);
+}

@@ -38,19 +38,16 @@ off by a second or two, nudge this first.
 
 ### Settings
 
+Find these under *Extensions → Atlas Conquest → Configure* on your Twitch
+dashboard. Changes save as you make them.
+
 | Setting | Default | What it does |
 |---|---|---|
 | Stream delay | 4s | Aligns the overlay with your delayed video |
 | Board hover | on | Hover characters on the board |
-| Hand hover | on | Hover the cards in your hand |
-| History hover | on | Hover rows in the action history |
-| Decklist | on | Shows your starting deck to viewers |
-| Share deck code | **off** | Lets viewers copy your list |
-| Panel side | right | Which side the decklist sits on |
 
-**A note on "Share deck code".** It's off by default on purpose: anyone watching
-your stream — including an opponent — gets your full list. Turn it on for casual
-or educational streams; leave it off for ranked or tournament play.
+Hand hover, the decklist, and the action-history panel are still being built and
+will appear here as they ship.
 
 ### It only runs while you're live
 
@@ -138,8 +135,24 @@ See `shared/protocol.ts` — it's the authority, and it's commented.
 ### Running the tests
 
 ```bash
-npm test          # protocol: delta/keyframe folding, motion intervals, projection
+npm test          # protocol: delta/keyframe folding, motion intervals, projection, config
 ```
+
+### Running the frontend locally
+
+```bash
+cd frontend && npm run dev     # https://localhost:8080
+```
+
+HTTPS and port 8080 are both fixed, not preferences. Twitch embeds extension
+pages in an iframe on an https origin and a browser will not embed an http one,
+and during Local Test it fetches assets from the Testing Base URI literally, so
+the port has to match what is registered.
+
+The certificate is self-signed, which means **the first thing to do is open
+https://localhost:8080/video_overlay.html directly and accept the warning**.
+Until that happens the iframe fails silently and the extension looks broken
+rather than untrusted.
 
 ### Self-hosting
 

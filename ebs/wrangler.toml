@@ -7,7 +7,7 @@ compatibility_date = "2026-01-01"
 # storage I/O at all.
 [[kv_namespaces]]
 binding = "REVOCATIONS"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "56a0646938f5441eb8b599a6efeea986"
 
 # Secrets are set out of band, never committed:
 #   npx wrangler secret put TWITCH_EXTENSION_SECRET   # shared secret, base64

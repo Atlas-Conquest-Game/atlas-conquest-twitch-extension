@@ -3,25 +3,18 @@ import { useEffect, useState } from "react";
 import { Overlay } from "./Overlay.tsx";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { loadCards, type CardDatabase } from "./cards.ts";
-import type { Snapshot } from "../../shared/protocol.ts";
+import {
+  parseBroadcasterConfig, DEFAULT_CONFIG,
+  type Snapshot, type BroadcasterConfig,
+} from "../../shared/protocol.ts";
 import "./overlay.css";
 
-declare global {
-  interface Window {
-    Twitch?: {
-      ext: {
-        onAuthorized(cb: (auth: { channelId: string }) => void): void;
-        listen(topic: string, cb: (target: string, type: string, msg: string) => void): void;
-        configuration: { broadcaster?: { content: string } };
-      };
-    };
-  }
-}
 
 const buffer = new SnapshotBuffer();
 
 function App() {
   const [cards, setCards] = useState<CardDatabase | null>(null);
+  const [config, setConfig] = useState<BroadcasterConfig>(DEFAULT_CONFIG);
 
   useEffect(() => {
     loadCards().then(setCards).catch((e) => console.error("card data", e));
@@ -31,19 +24,19 @@ function App() {
 
     // Broadcaster settings come from Twitch's Configuration Service, which is
     // free and hosted by them -- our EBS never sees or stores them.
-    ext.onAuthorized(() => {
-      try {
-        const raw = ext.configuration.broadcaster?.content;
-        if (raw) {
-          const config = JSON.parse(raw) as { delayMs?: number };
-          if (typeof config.delayMs === "number") buffer.setDelay(config.delayMs);
-        }
-      } catch (e) {
-        // A malformed config must not take the overlay down; the default delay
-        // is still a usable experience.
-        console.warn("broadcaster config unreadable, using defaults", e);
-      }
-    });
+    //
+    // parseBroadcasterConfig degrades per-field rather than wholesale, so a
+    // config written by a newer version does not reset the streamer's delay.
+    const applyConfig = () => {
+      const next = parseBroadcasterConfig(ext.configuration.broadcaster?.content);
+      buffer.setDelay(next.delayMs);
+      setConfig(next);
+    };
+
+    // onChanged as well as onAuthorized: a streamer adjusting the delay while
+    // live should see it take effect without every viewer reloading.
+    ext.configuration.onChanged(applyConfig);
+    ext.onAuthorized(applyConfig);
 
     ext.listen("broadcast", (_target, _type, message) => {
       try {
@@ -55,6 +48,9 @@ function App() {
   }, []);
 
   if (!cards) return null;
+  // Switched off by the streamer: render nothing at all rather than an empty
+  // hit layer, so there is no invisible surface over their video.
+  if (!config.boardHover) return null;
   return <Overlay buffer={buffer} cards={cards} />;
 }
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   applySnapshot, emptyBoard, isMoving, cellToViewport, hexRadius,
   mergeIntervals, estimateClockSkew,
+  parseBroadcasterConfig, clampDelay, DEFAULT_CONFIG, MAX_DELAY_MS,
   type Snapshot, type Affine,
 } from "./protocol.ts";
 
@@ -228,4 +229,39 @@ test("skew estimate ignores a single delayed message", () => {
 
 test("no samples means assume no skew", () => {
   assert.equal(estimateClockSkew([]), 0);
+});
+
+// --- broadcaster config ------------------------------------------------------
+
+test("config round-trips what the config page writes", () => {
+  const written = JSON.stringify({ delayMs: 7500, boardHover: false });
+  assert.deepEqual(parseBroadcasterConfig(written), { delayMs: 7500, boardHover: false });
+});
+
+test("a missing or unreadable config falls back to defaults", () => {
+  // A streamer who never opened the config page has no stored segment at all,
+  // which is the common case rather than an error.
+  for (const raw of [undefined, null, "", "not json", "[1,2,3]", "null"]) {
+    assert.deepEqual(parseBroadcasterConfig(raw), DEFAULT_CONFIG, `failed for ${String(raw)}`);
+  }
+});
+
+test("unknown or missing fields fall back individually, not wholesale", () => {
+  // A config written by a newer version must not discard the fields this one
+  // does understand -- that would silently reset a streamer's delay on rollback.
+  const partial = JSON.stringify({ delayMs: 9000, somethingNew: true });
+  assert.deepEqual(parseBroadcasterConfig(partial), {
+    delayMs: 9000,
+    boardHover: DEFAULT_CONFIG.boardHover,
+  });
+});
+
+test("implausible delays are clamped rather than trusted", () => {
+  // Negative would render snapshots that have not happened yet; enormous would
+  // park the overlay before the match started.
+  assert.equal(clampDelay(-5000), 0);
+  assert.equal(clampDelay(999_999), MAX_DELAY_MS);
+  assert.equal(clampDelay(Number.NaN), DEFAULT_CONFIG.delayMs);
+  assert.equal(clampDelay("6000"), DEFAULT_CONFIG.delayMs, "a string delay is not a number");
+  assert.equal(clampDelay(4321.7), 4322, "sub-millisecond precision is meaningless here");
 });
