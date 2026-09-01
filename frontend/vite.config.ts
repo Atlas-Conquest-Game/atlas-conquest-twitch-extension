@@ -16,8 +16,14 @@ export default defineConfig({
   server: {
     // Twitch compares the Testing Base URI literally, so this port is fixed
     // rather than "whatever was free". strictPort makes a clash an error instead
-    // of a silent move to 8081 and an extension that never loads.
-    port: 8080,
+    // of a silent move to 8444 and an extension that never loads.
+    //
+    // 8443 rather than the more usual 8080 because MCP for Unity binds
+    // 127.0.0.1:8080 and starts with the project. Two servers on one port but
+    // different interfaces is worse than a clash: the browser picks ::1 or
+    // 127.0.0.1 on its own, so it can reach the plain-HTTP one and fail the TLS
+    // handshake with an error that points nowhere near the cause.
+    port: 8443,
     strictPort: true,
   },
 

@@ -141,7 +141,7 @@ npm test          # protocol: delta/keyframe folding, motion intervals, projecti
 ### Running the frontend locally
 
 ```bash
-cd frontend && npm run dev     # https://localhost:8080
+cd frontend && npm run dev     # https://localhost:8443
 ```
 
 HTTPS and port 8080 are both fixed, not preferences. Twitch embeds extension
@@ -149,8 +149,13 @@ pages in an iframe on an https origin and a browser will not embed an http one,
 and during Local Test it fetches assets from the Testing Base URI literally, so
 the port has to match what is registered.
 
+Port 8443, not 8080: MCP for Unity binds `127.0.0.1:8080` whenever the project is
+open, and sharing a port across interfaces is worse than a clash, since the
+browser chooses between `::1` and `127.0.0.1` on its own and can land on the
+plain-HTTP listener.
+
 The certificate is self-signed, which means **the first thing to do is open
-https://localhost:8080/video_overlay.html directly and accept the warning**.
+https://localhost:8443/video_overlay.html directly and accept the warning**.
 Until that happens the iframe fails silently and the extension looks broken
 rather than untrusted.
 
