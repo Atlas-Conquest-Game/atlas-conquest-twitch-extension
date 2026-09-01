@@ -154,10 +154,32 @@ open, and sharing a port across interfaces is worse than a clash, since the
 browser chooses between `::1` and `127.0.0.1` on its own and can land on the
 plain-HTTP listener.
 
-The certificate is self-signed, which means **the first thing to do is open
-https://localhost:8443/video_overlay.html directly and accept the warning**.
-Until that happens the iframe fails silently and the extension looks broken
-rather than untrusted.
+**First-time setup needs two things, and both fail silently without them.**
+
+*A trusted certificate.* A self-signed one is not enough: Twitch loads the config
+page in an iframe, and Chrome refuses an untrusted certificate in a subframe with
+no way to click through. Accepting it in a top-level tab does not carry over, and
+`--ignore-certificate-errors` is ignored outright by current Chrome. Issue a real
+one:
+
+```bash
+mkcert -install
+cd frontend && mkdir -p certs
+mkcert -key-file certs/localhost-key.pem -cert-file certs/localhost.pem localhost 127.0.0.1 ::1
+```
+
+`certs/` is gitignored; vite picks the files up automatically and warns loudly if
+they are missing.
+
+*Local network access.* Chrome blocks a public origin (twitch.tv) from fetching a
+loopback address. It shows a permission prompt on the dashboard page — allow it —
+or you can grant it under Site settings for `dashboard.twitch.tv`. This affects
+local development only; once the extension reaches Hosted Test its assets come
+from Twitch's own CDN.
+
+Both failures look identical from the outside: the Configure panel renders empty,
+with nothing in the page console. The request appears only in the *supervisor
+iframe's* network log, which is a separate target from the page.
 
 ### Self-hosting
 

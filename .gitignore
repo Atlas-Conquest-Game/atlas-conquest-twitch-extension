@@ -8,3 +8,7 @@ dist/
 # art/ and data/ are generated: sync.sh --extension downscales the card
 # screenshots from the game repo into them. They ARE committed (GitHub Pages
 # serves them from the repo root), but are never hand-edited.
+
+# Locally-issued dev certificates (mkcert). Machine-specific, and the key must
+# never be committed. Regenerate with the command in frontend/vite.config.ts.
+frontend/certs/
