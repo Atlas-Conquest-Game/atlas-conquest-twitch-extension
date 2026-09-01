@@ -21,23 +21,21 @@ const CONFIG_VERSION = "1";
 
 function Config() {
   const [config, setConfig] = useState<BroadcasterConfig>(DEFAULT_CONFIG);
-  const [ready, setReady] = useState(false);
+  const [connected, setConnected] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const ext = window.Twitch?.ext;
-    if (!ext) {
-      // Opened outside Twitch (local dev). Show the form with defaults rather
-      // than a blank page, so the layout can still be worked on.
-      setReady(true);
-      return;
-    }
+    if (!ext) return;
 
     const load = () => {
       setConfig(parseBroadcasterConfig(ext.configuration.broadcaster?.content));
-      setReady(true);
+      setConnected(true);
     };
 
+    // onChanged only fires once a stored segment exists, so a streamer who has
+    // never saved would never see it. onAuthorized covers that case, and either
+    // arriving is enough.
     ext.configuration.onChanged(load);
     ext.onAuthorized(load);
   }, []);
@@ -58,8 +56,10 @@ function Config() {
     window.setTimeout(() => setSaved(false), 1500);
   };
 
-  if (!ready) return <div className="config"><p className="muted">Loading…</p></div>;
-
+  // Rendered immediately, with defaults, rather than waiting on Twitch's helper.
+  // Gating on a callback meant that if neither onAuthorized nor onChanged fired
+  // the page sat empty forever -- and an empty settings page gives a streamer
+  // nothing to act on, not even the knowledge that something failed.
   const seconds = (config.delayMs / 1000).toFixed(1);
 
   return (
@@ -113,7 +113,7 @@ function Config() {
       </section>
 
       <p className="muted small">
-        {saved ? "Saved." : " "}
+        {saved ? "Saved." : connected ? " " : "Not connected to Twitch — changes cannot be saved from here."}
       </p>
 
       <hr />
