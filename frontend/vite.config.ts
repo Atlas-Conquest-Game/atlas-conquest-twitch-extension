@@ -25,6 +25,20 @@ export default defineConfig({
     // handshake with an error that points nowhere near the cause.
     port: 8443,
     strictPort: true,
+
+    // Dual-stack, and this is not a preference.
+    //
+    // Left to itself vite binds whichever loopback Node's resolver returns first,
+    // which here was ::1 alone. curl and the browser then disagree: curl reached
+    // it, Chrome asked for 127.0.0.1, got connection refused, and rendered the
+    // config iframe blank with no error anywhere. "::" listens on both families,
+    // so "localhost" works whichever way it resolves.
+    //
+    // It also exposes the server on the LAN for as long as it runs. That is
+    // acceptable for a dev server whose entire contents are in a public repo, and
+    // the alternative -- pinning the Testing Base URI to a literal IP -- means
+    // re-accepting the certificate for a second origin.
+    host: "::",
   },
 
   // Twitch serves the built files from a versioned path, so every asset
