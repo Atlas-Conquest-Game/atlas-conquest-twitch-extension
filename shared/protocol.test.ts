@@ -4,7 +4,8 @@ import {
   applySnapshot, emptyBoard, isMoving, cellToViewport, hexRadius,
   mergeIntervals, estimateClockSkew,
   parseBroadcasterConfig, clampDelay, DEFAULT_CONFIG, MAX_DELAY_MS,
-  type Snapshot, type Affine,
+  REGION, HAND, HIST, MAX_HISTORY,
+  type Snapshot, type Affine, type HandTuple, type HistoryTuple, type MotionInterval,
 } from "./protocol.ts";
 
 // O=(0,0)  U=(1,0)  V=(0,1)  no parity offsets
@@ -285,4 +286,78 @@ test("a delta without a deck link keeps the one already known", () => {
   s = applySnapshot(s, { v: 1, t: 2, s: 1, k: 0, e: [] });
   assert.ok(s);
   assert.deepEqual(s.deck, ["Ramp", "https://example/deck"]);
+});
+
+// --- regions -----------------------------------------------------------------
+
+test("a board pan does not blank the hand, and vice versa", () => {
+  // The whole reason motion is region-tagged. Sharing one channel meant panning
+  // the camera hid the hand, and drawing a card hid the board.
+  const boardPan: MotionInterval[] = [[1000, 2000]];               // region omitted = board
+  const handDraw: MotionInterval[] = [[1000, 2000, REGION.Hand]];
+
+  assert.equal(isMoving(boardPan, 1500, 0, REGION.Board), true);
+  assert.equal(isMoving(boardPan, 1500, 0, REGION.Hand), false, "a pan must not blank the hand");
+
+  assert.equal(isMoving(handDraw, 1500, 0, REGION.Hand), true);
+  assert.equal(isMoving(handDraw, 1500, 0, REGION.Board), false, "a draw must not blank the board");
+});
+
+test("board and hand intervals starting in the same millisecond both survive", () => {
+  // Keyed on start alone, one would silently overwrite the other -- and they can
+  // genuinely coincide, since playing a card moves the hand and the board.
+  const merged = mergeIntervals([], [[500, null], [500, null, REGION.Hand]], 500);
+
+  assert.equal(merged.length, 2);
+  assert.equal(isMoving(merged, 600, 0, REGION.Board), true);
+  assert.equal(isMoving(merged, 600, 0, REGION.Hand), true);
+});
+
+// --- hand --------------------------------------------------------------------
+
+test("a keyframe replaces the hand, a delta patches it", () => {
+  const a: HandTuple = [1, 100, 0.1, 0.1, 0.05, 0.12];
+  const b: HandTuple = [2, 200, 0.2, 0.1, 0.05, 0.12];
+
+  let s = applySnapshot(emptyBoard(), { ...keyframe(0), h: [a, b] });
+  assert.ok(s);
+  assert.equal(s.hand.size, 2);
+
+  // Delta: one card moves, the other is played.
+  const moved: HandTuple = [1, 100, 0.3, 0.1, 0.05, 0.12];
+  s = applySnapshot(s, { v: 1, t: 2, s: 1, k: 0, h: [moved], hx: [2] });
+  assert.ok(s);
+  assert.equal(s.hand.size, 1);
+  assert.equal(s.hand.get(1)?.[HAND.X], 0.3);
+});
+
+// --- history -----------------------------------------------------------------
+
+test("history appends across deltas and is capped", () => {
+  // Append-only is the ideal delta shape, but a long match must not grow the
+  // list without bound in a browser that may be open for hours.
+  let s = applySnapshot(emptyBoard(), { ...keyframe(0), n: [[1, 10, 0, 0]] });
+  assert.ok(s);
+
+  let lastId = 1;
+  for (let i = 1; i <= MAX_HISTORY + 5; i++) {
+    lastId = i + 1;
+    const entry: HistoryTuple = [lastId, 10 + i, 0, 0];
+    s = applySnapshot(s!, { v: 1, t: i + 1, s: i, k: 0, n: [entry] });
+    assert.ok(s);
+  }
+
+  assert.equal(s!.history.length, MAX_HISTORY, "history must stay bounded");
+  // Trimmed from the front, so the newest survive.
+  assert.equal(s!.history[s!.history.length - 1][HIST.Id], lastId);
+  assert.equal(s!.history[0][HIST.Id], lastId - MAX_HISTORY + 1, "oldest are dropped, not newest");
+});
+
+test("the history rect carries forward between keyframes", () => {
+  let s = applySnapshot(emptyBoard(), { ...keyframe(0), nr: [0.9, 0.2, 0.06, 0.6] });
+  assert.ok(s);
+  s = applySnapshot(s, { v: 1, t: 2, s: 1, k: 0 });
+  assert.ok(s);
+  assert.deepEqual(s.historyRect, [0.9, 0.2, 0.06, 0.6],
+    "a delta without a rect must not blank the panel");
 });

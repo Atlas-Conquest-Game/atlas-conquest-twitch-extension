@@ -129,6 +129,22 @@ function Config() {
         </p>
       </section>
 
+      <section>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={config.history}
+            onChange={(e) => update({ history: e.target.checked })}
+          />
+          <span>Interactive action history</span>
+        </label>
+        <p className="help">
+          Draws a readable copy of your action history over the one on screen, so
+          viewers can scroll it and click an entry to see the card. Turn it off to
+          leave your own list visible instead.
+        </p>
+      </section>
+
       <p className="muted small">
         {saved ? "Saved." : connected ? " " : "Not connected to Twitch — changes cannot be saved from here."}
       </p>

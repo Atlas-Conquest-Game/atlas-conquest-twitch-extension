@@ -24,6 +24,41 @@ export const PROTOCOL_VERSION = 1;
  */
 export type DeckLink = [name: string, url: string];
 
+/**
+ * A rectangle in Unity viewport coordinates: x/y from the bottom-left, 0..1.
+ *
+ * Kept in Unity's orientation rather than flipped at the publisher so every
+ * coordinate on the wire means the same thing; the frontend flips once, at the
+ * point it writes CSS.
+ */
+export type Rect = [x: number, y: number, w: number, h: number];
+
+/**
+ * A card in the streamer's hand: `[handle, cardId, x, y, w, h]`.
+ *
+ * Rectangles rather than the board's cell projection, because hand cards are UI
+ * elements positioned by a layout, not by the hex grid -- there is no basis to
+ * project through, so their rects are measured and sent directly.
+ */
+export type HandTuple = [number, number, number, number, number, number];
+export const HAND = { Handle: 0, CardId: 1, X: 2, Y: 3, W: 4, H: 5 } as const;
+
+/** What an action-history row records. */
+export const HISTORY_KIND = { Play: 0, Ability: 1, Discard: 2, Reveal: 3 } as const;
+export type HistoryKind = (typeof HISTORY_KIND)[keyof typeof HISTORY_KIND];
+
+/**
+ * One row of the action history: `[id, cardId, kind, owner]`.
+ *
+ * Append-only, which is the ideal delta shape -- a snapshot carries the entries
+ * added since the last one and never resends the rest.
+ */
+export type HistoryTuple = [number, number, number, number];
+export const HIST = { Id: 0, CardId: 1, Kind: 2, Owner: 3 } as const;
+
+/** Most rows the frontend keeps. Matches the game's own cap. */
+export const MAX_HISTORY = 40;
+
 /** Entity tuple: [handle, cardId, q, r, health, owner].
  *
  *  A fixed-order tuple rather than a keyed object, which is roughly 60% smaller
@@ -45,7 +80,21 @@ export const E = { Handle: 0, CardId: 1, Q: 2, R: 3, Health: 4, Owner: 5 } as co
  * publisher runs at frame rate and knows the exact boundaries, so it sends them
  * verbatim and the transport rate stops mattering.
  */
-export type MotionInterval = [number, number | null];
+/**
+ * Which part of the screen an interval describes.
+ *
+ * Board and hand move for unrelated reasons -- the camera pans, and separately a
+ * card is drawn or reordered -- so a single motion channel would blank the hand
+ * every time someone panned, and blank the board every time a card animated.
+ * The history panel needs no channel at all: the overlay draws its own copy over
+ * that region, so the streamer scrolling theirs is irrelevant.
+ */
+export const REGION = { Board: 0, Hand: 1 } as const;
+export type Region = (typeof REGION)[keyof typeof REGION];
+
+/** `[start, end, region]`. Region is omitted for the board, which is the common
+ *  case and the historical shape of this tuple. */
+export type MotionInterval = [number, number | null, Region?];
 
 /**
  * Cell -> viewport projection basis, as
@@ -102,6 +151,16 @@ export interface Snapshot {
   /** Streamer's deck link. Keyframes only: a deck cannot change mid-match, so
    *  re-sending it in every delta would spend wire budget on a constant. */
   d?: DeckLink;
+
+  /** Hand cards added or moved. On a keyframe, the whole hand. */
+  h?: HandTuple[];
+  /** Handles of hand cards no longer present. */
+  hx?: number[];
+
+  /** Action-history rows added since the previous snapshot. */
+  n?: HistoryTuple[];
+  /** Where the game draws its history column, so the overlay can cover it. */
+  nr?: Rect;
 }
 
 /** Board state the frontend renders, reconstructed from keyframe + deltas. */
@@ -112,10 +171,17 @@ export interface BoardState {
   entities: Map<number, EntityTuple>;
   /** Null until a keyframe carrying one arrives. */
   deck: DeckLink | null;
+  hand: Map<number, HandTuple>;
+  /** Oldest first. Capped at MAX_HISTORY. */
+  history: HistoryTuple[];
+  historyRect: Rect | null;
 }
 
 export function emptyBoard(): BoardState {
-  return { t: 0, seq: -1, affine: null, entities: new Map(), deck: null };
+  return {
+    t: 0, seq: -1, affine: null, entities: new Map(), deck: null,
+    hand: new Map(), history: [], historyRect: null,
+  };
 }
 
 /**
@@ -137,12 +203,24 @@ export function applySnapshot(prev: BoardState, snap: Snapshot): BoardState | nu
   for (const e of snap.e ?? []) entities.set(e[E.Handle], e);
   for (const handle of snap.x ?? []) entities.delete(handle);
 
+  const hand = snap.k === 1 ? new Map<number, HandTuple>() : new Map(prev.hand);
+  for (const c of snap.h ?? []) hand.set(c[HAND.Handle], c);
+  for (const handle of snap.hx ?? []) hand.delete(handle);
+
+  // A keyframe replaces the history outright; a delta appends. Trimmed from the
+  // front so a long match cannot grow the list without bound.
+  let history = snap.k === 1 ? [...(snap.n ?? [])] : [...prev.history, ...(snap.n ?? [])];
+  if (history.length > MAX_HISTORY) history = history.slice(history.length - MAX_HISTORY);
+
   return {
     t: snap.t,
     seq: snap.s,
     // Carried forward when absent, so a delta does not blank the deck button
     // between keyframes.
     deck: snap.d ?? prev.deck,
+    hand,
+    history,
+    historyRect: snap.nr ?? prev.historyRect,
     affine: snap.a ?? prev.affine,
     entities,
   };
@@ -184,8 +262,14 @@ export function hexRadius(a: Affine): number {
  * moment -- looking them up is just a read further along a buffer it keeps
  * anyway.
  */
-export function isMoving(intervals: MotionInterval[], t: number, lead = 100): boolean {
-  for (const [start, end] of intervals) {
+export function isMoving(
+  intervals: MotionInterval[],
+  t: number,
+  lead = 100,
+  region: Region = REGION.Board,
+): boolean {
+  for (const [start, end, r] of intervals) {
+    if ((r ?? REGION.Board) !== region) continue;
     if (t >= start - lead && (end === null || t <= end)) return true;
   }
   return false;
@@ -209,12 +293,16 @@ export function mergeIntervals(
   now = 0,
   keepMs = 60_000,
 ): MotionInterval[] {
-  const byStart = new Map<number, MotionInterval>();
-  for (const interval of existing) byStart.set(interval[0], interval);
-  for (const interval of incoming) byStart.set(interval[0], interval);
+  // Keyed by region AND start: the board and the hand can legitimately begin
+  // moving in the same millisecond, and keying on start alone would have one
+  // silently overwrite the other.
+  const byKey = new Map<string, MotionInterval>();
+  const key = (i: MotionInterval) => `${i[2] ?? REGION.Board}:${i[0]}`;
+  for (const interval of existing) byKey.set(key(interval), interval);
+  for (const interval of incoming) byKey.set(key(interval), interval);
 
-  return [...byStart.values()]
-    .filter(([start, end]) => end === null || end >= now - keepMs)
+  return [...byKey.values()]
+    .filter(([, end]) => end === null || end >= now - keepMs)
     .sort((a, b) => a[0] - b[0]);
 }
 
@@ -259,12 +347,20 @@ export interface BroadcasterConfig {
    * fine for most streams and not for a tournament.
    */
   deckLink: boolean;
+  /**
+   * Whether the overlay draws its own action-history panel over the game's.
+   *
+   * Covering the region is the point, so this is the switch for a streamer who
+   * would rather viewers saw their actual list, scroll position and all.
+   */
+  history: boolean;
 }
 
 export const DEFAULT_CONFIG: BroadcasterConfig = {
   delayMs: 4000,
   boardHover: true,
   deckLink: true,
+  history: true,
 };
 
 /** Widest delay the slider offers. Twitch's own delay tops out around 20s. */
@@ -294,6 +390,7 @@ export function parseBroadcasterConfig(raw: string | undefined | null): Broadcas
     delayMs: clampDelay(source.delayMs),
     boardHover: typeof source.boardHover === "boolean" ? source.boardHover : DEFAULT_CONFIG.boardHover,
     deckLink: typeof source.deckLink === "boolean" ? source.deckLink : DEFAULT_CONFIG.deckLink,
+    history: typeof source.history === "boolean" ? source.history : DEFAULT_CONFIG.history,
   };
 }
 

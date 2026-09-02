@@ -1,5 +1,5 @@
 import {
-  applySnapshot, emptyBoard, estimateClockSkew, isMoving, mergeIntervals,
+  applySnapshot, emptyBoard, estimateClockSkew, isMoving, mergeIntervals, REGION,
   type Affine, type BoardState, type MotionInterval, type Snapshot,
 } from "../../shared/protocol.ts";
 
@@ -139,7 +139,17 @@ export class SnapshotBuffer {
    * the video.
    */
   cameraMoving(now = Date.now(), lead = 100): boolean {
-    return isMoving(this.intervals, this.renderTime(now), lead);
+    return isMoving(this.intervals, this.renderTime(now), lead, REGION.Board);
+  }
+
+  /**
+   * Whether the hand is animating at the rendered moment.
+   *
+   * Separate from the camera: a pan must not blank the hand, and a card sliding
+   * into place must not blank the board.
+   */
+  handMoving(now = Date.now(), lead = 100): boolean {
+    return isMoving(this.intervals, this.renderTime(now), lead, REGION.Hand);
   }
 
   /** Latest projection basis at or before the visible frame. */

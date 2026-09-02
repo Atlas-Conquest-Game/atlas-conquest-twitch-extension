@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  cellToViewport, hexRadius, E,
-  type EntityTuple, type DeckLink,
+  cellToViewport, hexRadius, E, HAND, HIST, HISTORY_KIND,
+  type EntityTuple, type DeckLink, type HandTuple, type HistoryTuple, type Rect,
 } from "../../shared/protocol.ts";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { cardTextToHtml, type CardDatabase, type CardData } from "./cards.ts";
@@ -11,6 +11,8 @@ interface Props {
   cards: CardDatabase;
   /** Streamer's setting. When false the deck button is not rendered at all. */
   showDeckLink: boolean;
+  /** Streamer's setting for the interactive action-history panel. */
+  showHistory: boolean;
 }
 
 interface Hit {
@@ -23,6 +25,27 @@ interface Hit {
   health: number;
 }
 
+/** A hand card's hitbox. Rectangular, and positioned by its own measured rect
+ *  rather than through the board's projection. */
+interface HandHit {
+  handle: number;
+  card: CardData;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Unity viewport rect -> CSS percentages, flipping the y axis once. */
+function rectToCss(r: Rect) {
+  return {
+    left: r[0] * 100,
+    top: (1 - (r[1] + r[3])) * 100,
+    width: r[2] * 100,
+    height: r[3] * 100,
+  };
+}
+
 /**
  * The hover layer.
  *
@@ -31,8 +54,11 @@ interface Hit {
  * snapshot. A pan that ends between two messages still has to release the
  * hitboxes at the right moment.
  */
-export function Overlay({ buffer, cards, showDeckLink }: Props) {
+export function Overlay({ buffer, cards, showDeckLink, showHistory }: Props) {
   const [hits, setHits] = useState<Hit[]>([]);
+  const [handHits, setHandHits] = useState<HandHit[]>([]);
+  const [history, setHistory] = useState<HistoryTuple[]>([]);
+  const [historyRect, setHistoryRect] = useState<Rect | null>(null);
   const [deck, setDeck] = useState<DeckLink | null>(null);
   const [moving, setMoving] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -83,6 +109,36 @@ export function Overlay({ buffer, cards, showDeckLink }: Props) {
         setHits(next);
       }
 
+      // The hand has its own motion channel, so it is blanked and restored
+      // independently of the board.
+      if (!state || buffer.handMoving(now)) {
+        setHandHits((prev) => (prev.length ? [] : prev));
+      } else {
+        const next: HandHit[] = [];
+        for (const c of state.hand.values() as Iterable<HandTuple>) {
+          const card = cards.get(c[HAND.CardId]);
+          if (!card) continue;
+          const css = rectToCss([c[HAND.X], c[HAND.Y], c[HAND.W], c[HAND.H]]);
+          next.push({ handle: c[HAND.Handle], card, ...css });
+        }
+        setHandHits(next);
+      }
+
+      // History is not blanked by anything: the overlay draws its own copy over
+      // the region, so what the streamer's list is doing underneath is
+      // irrelevant.
+      setHistory((prev) => {
+        const next = state?.history ?? [];
+        if (prev.length === next.length && prev[prev.length - 1] === next[next.length - 1]) return prev;
+        return next;
+      });
+      setHistoryRect((prev) => {
+        const next = state?.historyRect ?? null;
+        if (prev === next) return prev;
+        if (prev && next && prev.every((v, i) => v === next[i])) return prev;
+        return next;
+      });
+
       frame.current = requestAnimationFrame(tick);
     };
 
@@ -91,7 +147,8 @@ export function Overlay({ buffer, cards, showDeckLink }: Props) {
   }, [buffer, cards]);
 
   const showing = pinned ?? hovered;
-  const showingHit = hits.find((h) => h.handle === showing);
+  const showingHit = hits.find((h) => h.handle === showing)
+    ?? handHits.find((h) => h.handle === showing);
 
   return (
     <div className="ac-overlay" data-moving={moving}>
@@ -118,6 +175,32 @@ export function Overlay({ buffer, cards, showDeckLink }: Props) {
           }}
         />
       ))}
+
+      {/* Drawn after the board boxes so a hand card overlapping a low unit wins
+          the pointer: the hand is in front on screen, so it must be in front
+          here too. */}
+      {handHits.map((hit) => (
+        <button
+          key={hit.handle}
+          className="ac-hit ac-hit-hand"
+          style={{
+            left: `${hit.left}%`,
+            top: `${hit.top}%`,
+            width: `${hit.width}%`,
+            height: `${hit.height}%`,
+          }}
+          onMouseEnter={() => setHovered(hit.handle)}
+          onMouseLeave={() => setHovered((h) => (h === hit.handle ? null : h))}
+          onClick={(e) => {
+            e.preventDefault();
+            setPinned((p) => (p === hit.handle ? null : hit.handle));
+          }}
+        />
+      ))}
+
+      {showHistory && historyRect && (
+        <HistoryPanel rect={historyRect} entries={history} cards={cards} />
+      )}
 
       {showDeckLink && deck && <DeckButton deck={deck} />}
 
@@ -160,9 +243,79 @@ function DeckButton({ deck }: { deck: DeckLink }) {
   );
 }
 
+/**
+ * An interactive copy of the game's action history, drawn over the game's own.
+ *
+ * Replacing the region rather than putting hover boxes on it, because the
+ * streamer's list scrolls: boxes would need their own motion channel, would
+ * blank on every scroll, and would still leave a viewer unable to look back at
+ * anything that had scrolled away. Covering it costs nothing -- the history is a
+ * static log, so nothing is hidden that was worth watching -- and gives viewers
+ * their own scroll position and a crisp list instead of an 80px strip of
+ * compressed video.
+ *
+ * Opaque on purpose. A translucent panel would show the streamer's list bleeding
+ * through at a different scroll offset, which reads as a rendering fault.
+ */
+function HistoryPanel({
+  rect, entries, cards,
+}: { rect: Rect; entries: HistoryTuple[]; cards: CardDatabase }) {
+  const css = rectToCss(rect);
+  const [open, setOpen] = useState<number | null>(null);
+
+  // Newest first, matching the game.
+  const rows = [...entries].reverse();
+
+  return (
+    <div
+      className="ac-history"
+      style={{
+        left: `${css.left}%`,
+        top: `${css.top}%`,
+        width: `${css.width}%`,
+        height: `${css.height}%`,
+      }}
+    >
+      {rows.map((entry) => {
+        const card = cards.get(entry[HIST.CardId]);
+        if (!card) return null;
+        const id = entry[HIST.Id];
+        return (
+          <button
+            key={id}
+            className="ac-history-row"
+            data-kind={entry[HIST.Kind] === HISTORY_KIND.Ability ? "ability" : "play"}
+            data-owner={entry[HIST.Owner]}
+            data-open={open === id}
+            title={card.name}
+            onClick={() => setOpen((p) => (p === id ? null : id))}
+          >
+            <img src={cards.artUrl(card)} alt={card.name} loading="lazy" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * What the card panel needs, which is less than a board hit carries.
+ *
+ * Narrowed so a hand card can open the same panel: a card in hand has no live
+ * health and no hex size, and inventing values for them would put a wrong number
+ * on screen rather than omitting one.
+ */
+interface PanelSource {
+  card: CardData;
+  /** Horizontal position, used only to decide which side to open on. */
+  left: number;
+  /** Live health, for a unit on the board. Absent for a card in hand. */
+  health?: number;
+}
+
 function CardPanel({
   hit, cards, pinned, onClose,
-}: { hit: Hit; cards: CardDatabase; pinned: boolean; onClose: () => void }) {
+}: { hit: PanelSource; cards: CardDatabase; pinned: boolean; onClose: () => void }) {
   const { card } = hit;
 
   // Flip to the other side when the hex is on the right, so the panel never
@@ -188,8 +341,12 @@ function CardPanel({
           <div className="ac-card-stats">
             <span>{card.attack} ATK</span>
             <span>{card.speed} SPD</span>
-            {/* Live health, not the printed value - the viewer wants the board. */}
-            <span>{hit.health} / {card.health} HP</span>
+            {/* Live health for a unit on the board, because that is what the
+                viewer is looking at. A card in hand has none yet, so it shows
+                the printed value rather than a made-up current one. */}
+            <span>
+              {hit.health !== undefined ? `${hit.health} / ${card.health}` : card.health} HP
+            </span>
           </div>
         )}
 
