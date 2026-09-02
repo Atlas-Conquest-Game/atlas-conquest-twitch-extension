@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { cellToViewport, hexRadius, E, type EntityTuple } from "../../shared/protocol.ts";
+import {
+  cellToViewport, hexRadius, E,
+  type EntityTuple, type DeckLink,
+} from "../../shared/protocol.ts";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { cardTextToHtml, type CardDatabase, type CardData } from "./cards.ts";
 
 interface Props {
   buffer: SnapshotBuffer;
   cards: CardDatabase;
+  /** Streamer's setting. When false the deck button is not rendered at all. */
+  showDeckLink: boolean;
 }
 
 interface Hit {
@@ -26,8 +31,9 @@ interface Hit {
  * snapshot. A pan that ends between two messages still has to release the
  * hitboxes at the right moment.
  */
-export function Overlay({ buffer, cards }: Props) {
+export function Overlay({ buffer, cards, showDeckLink }: Props) {
   const [hits, setHits] = useState<Hit[]>([]);
+  const [deck, setDeck] = useState<DeckLink | null>(null);
   const [moving, setMoving] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
   const [pinned, setPinned] = useState<number | null>(null);
@@ -39,6 +45,16 @@ export function Overlay({ buffer, cards }: Props) {
       const state = buffer.stateAt(now);
       const isMoving = buffer.cameraMoving(now);
       setMoving(isMoving);
+
+      // Deliberately outside the isMoving branch below. The deck button is
+      // anchored to the player's HUD, not to the board, so panning the camera
+      // must not make it flicker along with the hitboxes.
+      setDeck((prev) => {
+        const next = state?.deck ?? null;
+        if (prev === next) return prev;
+        if (prev && next && prev[0] === next[0] && prev[1] === next[1]) return prev;
+        return next;
+      });
 
       if (!state?.affine || isMoving) {
         setHits((prev) => (prev.length ? [] : prev));
@@ -103,6 +119,8 @@ export function Overlay({ buffer, cards }: Props) {
         />
       ))}
 
+      {showDeckLink && deck && <DeckButton deck={deck} />}
+
       {showingHit && (
         <CardPanel
           hit={showingHit}
@@ -112,6 +130,33 @@ export function Overlay({ buffer, cards }: Props) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Link to the streamer's deck on the game's website.
+ *
+ * Sits on the left edge below the player HUD, which is where the game already
+ * shows whose deck this is, so the button reads as part of that column rather
+ * than as something floating over the board.
+ *
+ * A real anchor with target="_blank", not a scripted navigation: an extension
+ * iframe cannot navigate the page it sits in, and Twitch requires a visible
+ * indicator that a link leaves the site -- which the arrow provides.
+ */
+function DeckButton({ deck }: { deck: DeckLink }) {
+  const [name, url] = deck;
+  return (
+    <a
+      className="ac-deck"
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Open ${name} on atlas-conquest.com`}
+    >
+      <span className="ac-deck-name">{name}</span>
+      <span className="ac-deck-cta">View Deck <span aria-hidden="true">&#8599;</span></span>
+    </a>
   );
 }
 

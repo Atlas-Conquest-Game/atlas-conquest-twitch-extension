@@ -13,6 +13,17 @@
 
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * The streamer's deck, as a name and a link to it on the game's website.
+ *
+ * A link rather than a decklist, deliberately. The website already renders a
+ * deck properly, with its own hover behaviour, so rebuilding that inside a video
+ * overlay would be a worse copy of a page that already exists. It also keeps the
+ * overlay out of deciding what "cards remaining" means, which is a tracker's
+ * problem and carries assumptions this game has not made.
+ */
+export type DeckLink = [name: string, url: string];
+
 /** Entity tuple: [handle, cardId, q, r, health, owner].
  *
  *  A fixed-order tuple rather than a keyed object, which is roughly 60% smaller
@@ -88,6 +99,9 @@ export interface Snapshot {
   e?: EntityTuple[];
   /** Handles of entities removed since the previous snapshot. */
   x?: number[];
+  /** Streamer's deck link. Keyframes only: a deck cannot change mid-match, so
+   *  re-sending it in every delta would spend wire budget on a constant. */
+  d?: DeckLink;
 }
 
 /** Board state the frontend renders, reconstructed from keyframe + deltas. */
@@ -96,10 +110,12 @@ export interface BoardState {
   seq: number;
   affine: Affine | null;
   entities: Map<number, EntityTuple>;
+  /** Null until a keyframe carrying one arrives. */
+  deck: DeckLink | null;
 }
 
 export function emptyBoard(): BoardState {
-  return { t: 0, seq: -1, affine: null, entities: new Map() };
+  return { t: 0, seq: -1, affine: null, entities: new Map(), deck: null };
 }
 
 /**
@@ -124,6 +140,9 @@ export function applySnapshot(prev: BoardState, snap: Snapshot): BoardState | nu
   return {
     t: snap.t,
     seq: snap.s,
+    // Carried forward when absent, so a delta does not blank the deck button
+    // between keyframes.
+    deck: snap.d ?? prev.deck,
     affine: snap.a ?? prev.affine,
     entities,
   };
@@ -232,11 +251,20 @@ export interface BroadcasterConfig {
   delayMs: number;
   /** Whether hovering characters on the board is enabled. */
   boardHover: boolean;
+  /**
+   * Whether viewers see a link to the streamer's deck.
+   *
+   * On by default, but a switch rather than a given: the link resolves to the
+   * full decklist, so an opponent watching the stream learns it too. That is
+   * fine for most streams and not for a tournament.
+   */
+  deckLink: boolean;
 }
 
 export const DEFAULT_CONFIG: BroadcasterConfig = {
   delayMs: 4000,
   boardHover: true,
+  deckLink: true,
 };
 
 /** Widest delay the slider offers. Twitch's own delay tops out around 20s. */
@@ -265,6 +293,7 @@ export function parseBroadcasterConfig(raw: string | undefined | null): Broadcas
   return {
     delayMs: clampDelay(source.delayMs),
     boardHover: typeof source.boardHover === "boolean" ? source.boardHover : DEFAULT_CONFIG.boardHover,
+    deckLink: typeof source.deckLink === "boolean" ? source.deckLink : DEFAULT_CONFIG.deckLink,
   };
 }
 

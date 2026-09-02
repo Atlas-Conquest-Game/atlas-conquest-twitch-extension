@@ -51,7 +51,7 @@ function App() {
   // Switched off by the streamer: render nothing at all rather than an empty
   // hit layer, so there is no invisible surface over their video.
   if (!config.boardHover) return null;
-  return <Overlay buffer={buffer} cards={cards} />;
+  return <Overlay buffer={buffer} cards={cards} showDeckLink={config.deckLink} />;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

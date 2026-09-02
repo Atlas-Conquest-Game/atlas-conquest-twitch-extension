@@ -112,6 +112,23 @@ function Config() {
         </p>
       </section>
 
+      <section>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={config.deckLink}
+            onChange={(e) => update({ deckLink: e.target.checked })}
+          />
+          <span>Show a link to your deck</span>
+        </label>
+        <p className="help">
+          Puts your deck's name on the stream, linking to it on
+          atlas-conquest.com. Worth knowing that the link resolves to your full
+          decklist, so an opponent watching your stream can read it too. Fine for
+          most streams; turn it off for tournament play.
+        </p>
+      </section>
+
       <p className="muted small">
         {saved ? "Saved." : connected ? " " : "Not connected to Twitch — changes cannot be saved from here."}
       </p>

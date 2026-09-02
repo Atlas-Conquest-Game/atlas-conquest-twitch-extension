@@ -36,7 +36,16 @@ html, body, #root {
 
 .ac-card {
   position: absolute;
-  bottom: 8%;
+  /* Anchored to the TOP, not the bottom.
+     Bottom-anchoring grows a tall card upward, so the first thing pushed off
+     screen is the artwork -- the most useful part -- while the reminder text,
+     the least useful, is always fully visible. Anchoring here inverts that: the
+     art and rules text are always readable, and an unusually long reminder is
+     what gets clipped. Only matters in a small player, where the panel can
+     exceed the video height. */
+  top: 6%;
+  max-height: 88%;
+  overflow: hidden;
   width: min(300px, 26%);
   pointer-events: none;
   display: flex;
@@ -58,7 +67,17 @@ html, body, #root {
   border-color: rgba(255, 204, 68, 0.7);
 }
 
-.ac-card-art { width: 100%; border-radius: 6px; display: block; }
+/* Pinned means the viewer deliberately kept it open, so let them reach clipped
+   text. Not while hovering: a scrollbar appearing under a moving pointer is
+   noise, and the hover panel is glanceable rather than readable. */
+.ac-card[data-pinned="true"] .ac-card-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* flex: none so the art keeps its size when max-height squeezes the column;
+   without it the image is the thing flex shrinks first. */
+.ac-card-art { width: 100%; border-radius: 6px; display: block; flex: none; }
 .ac-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .ac-card-name { font-weight: 600; font-size: 15px; }
 .ac-card-cost { color: #6fd3ff; font-weight: 700; }
@@ -69,4 +88,52 @@ html, body, #root {
 
 @media (prefers-reduced-motion: reduce) {
   .ac-hit { transition: none; }
+}
+
+/*
+ * Deck link.
+ *
+ * Left edge, below the player HUD panels. The position is a constant rather than
+ * something published from the game: the HUD does not move, and publishing a
+ * rect for it would put a per-frame cost on the wire to place a button that
+ * never needs to move.
+ */
+.ac-deck {
+  position: absolute;
+  left: 1.5%;
+  top: 33%;
+  max-width: 20%;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(14, 12, 20, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f2efe9;
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1.3;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.ac-deck:hover,
+.ac-deck:focus-visible {
+  background: rgba(24, 20, 34, 0.96);
+  border-color: rgba(255, 204, 68, 0.7);
+}
+
+.ac-deck-name {
+  font-weight: 600;
+  /* Deck names are player-authored and occasionally very long. One line, clipped,
+     because two lines of a rambling name would push into the board. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-deck-cta {
+  opacity: 0.7;
+  font-size: 11px;
 }

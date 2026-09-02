@@ -234,8 +234,12 @@ test("no samples means assume no skew", () => {
 // --- broadcaster config ------------------------------------------------------
 
 test("config round-trips what the config page writes", () => {
-  const written = JSON.stringify({ delayMs: 7500, boardHover: false });
-  assert.deepEqual(parseBroadcasterConfig(written), { delayMs: 7500, boardHover: false });
+  // Spread the defaults rather than writing the object out: a new setting should
+  // not break a test about round-tripping, which is what happened the first time
+  // a field was added.
+  const written = JSON.stringify({ ...DEFAULT_CONFIG, delayMs: 7500, boardHover: false });
+  assert.deepEqual(parseBroadcasterConfig(written),
+    { ...DEFAULT_CONFIG, delayMs: 7500, boardHover: false });
 });
 
 test("a missing or unreadable config falls back to defaults", () => {
@@ -250,10 +254,7 @@ test("unknown or missing fields fall back individually, not wholesale", () => {
   // A config written by a newer version must not discard the fields this one
   // does understand -- that would silently reset a streamer's delay on rollback.
   const partial = JSON.stringify({ delayMs: 9000, somethingNew: true });
-  assert.deepEqual(parseBroadcasterConfig(partial), {
-    delayMs: 9000,
-    boardHover: DEFAULT_CONFIG.boardHover,
-  });
+  assert.deepEqual(parseBroadcasterConfig(partial), { ...DEFAULT_CONFIG, delayMs: 9000 });
 });
 
 test("implausible delays are clamped rather than trusted", () => {
@@ -264,4 +265,24 @@ test("implausible delays are clamped rather than trusted", () => {
   assert.equal(clampDelay(Number.NaN), DEFAULT_CONFIG.delayMs);
   assert.equal(clampDelay("6000"), DEFAULT_CONFIG.delayMs, "a string delay is not a number");
   assert.equal(clampDelay(4321.7), 4322, "sub-millisecond precision is meaningless here");
+});
+
+// --- deck link ---------------------------------------------------------------
+
+test("a keyframe carries the deck link into board state", () => {
+  const s = applySnapshot(emptyBoard(), {
+    ...keyframe(0), d: ["Dwarven Aggro", "https://atlas-conquest.com/decks/milo-sunstone/?code=abc"],
+  });
+  assert.ok(s);
+  assert.deepEqual(s.deck, ["Dwarven Aggro", "https://atlas-conquest.com/decks/milo-sunstone/?code=abc"]);
+});
+
+test("a delta without a deck link keeps the one already known", () => {
+  // Deltas omit the deck because it cannot change mid-match. If the fold dropped
+  // it, the button would blink out between keyframes.
+  let s = applySnapshot(emptyBoard(), { ...keyframe(0), d: ["Ramp", "https://example/deck"] });
+  assert.ok(s);
+  s = applySnapshot(s, { v: 1, t: 2, s: 1, k: 0, e: [] });
+  assert.ok(s);
+  assert.deepEqual(s.deck, ["Ramp", "https://example/deck"]);
 });
