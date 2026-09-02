@@ -12,3 +12,7 @@ dist/
 # Locally-issued dev certificates (mkcert). Machine-specific, and the key must
 # never be committed. Regenerate with the command in frontend/vite.config.ts.
 frontend/certs/
+
+# Build output for a Hosted Test upload. Regenerate with:
+#   cd frontend && npm run build   (then zip dist/ contents at the zip root)
+extension-hosted-test.zip
