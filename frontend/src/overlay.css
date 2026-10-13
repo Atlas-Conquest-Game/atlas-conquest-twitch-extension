@@ -207,6 +207,9 @@ html, body, #root {
      rather than as an unreadably small card. */
   object-fit: cover;
   object-position: 50% 28%;
+  /* The art is the card alone on transparency with a margin round it (no baked
+     drop shadow), so scale past the margin or the icon shows gaps at its edges. */
+  transform: scale(1.12);
   display: block;
 }
 
