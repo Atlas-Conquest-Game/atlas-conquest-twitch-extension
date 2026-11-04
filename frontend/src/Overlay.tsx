@@ -4,11 +4,15 @@ import {
   type EntityTuple, type DeckLink, type HandTuple, type HistoryTuple, type Rect,
 } from "../../shared/protocol.ts";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
-import { cardTextToHtml, type CardDatabase, type CardData } from "./cards.ts";
+import { type CardDatabase, type CardData } from "./cards.ts";
+import { DeckActions } from "./DeckActions.tsx";
+import type { Strings } from "./strings.ts";
 
 interface Props {
   buffer: SnapshotBuffer;
   cards: CardDatabase;
+  /** UI text in the viewer's language. */
+  t: Strings;
   /** Streamer's setting. When false the deck button is not rendered at all. */
   showDeckLink: boolean;
   /** Streamer's setting for the interactive action-history panel. */
@@ -54,7 +58,7 @@ function rectToCss(r: Rect) {
  * snapshot. A pan that ends between two messages still has to release the
  * hitboxes at the right moment.
  */
-export function Overlay({ buffer, cards, showDeckLink, showHistory }: Props) {
+export function Overlay({ buffer, cards, t, showDeckLink, showHistory }: Props) {
   const [hits, setHits] = useState<Hit[]>([]);
   const [handHits, setHandHits] = useState<HandHit[]>([]);
   const [history, setHistory] = useState<HistoryTuple[]>([]);
@@ -162,7 +166,7 @@ export function Overlay({ buffer, cards, showDeckLink, showHistory }: Props) {
             width: `${hit.size}%`,
             aspectRatio: "1",
           }}
-          aria-label={hit.card.name}
+          aria-label={cards.nameOf(hit.card)}
           onMouseEnter={() => setHovered(hit.handle)}
           onMouseLeave={() => setHovered((h) => (h === hit.handle ? null : h))}
           onClick={() => setPinned((p) => (p === hit.handle ? null : hit.handle))}
@@ -202,12 +206,13 @@ export function Overlay({ buffer, cards, showDeckLink, showHistory }: Props) {
         <HistoryPanel rect={historyRect} entries={history} cards={cards} />
       )}
 
-      {showDeckLink && deck && <DeckButton deck={deck} />}
+      {showDeckLink && deck && <DeckButton deck={deck} t={t} />}
 
       {showingHit && (
         <CardPanel
           hit={showingHit}
           cards={cards}
+          t={t}
           pinned={pinned === showingHit.handle}
           onClose={() => setPinned(null)}
         />
@@ -217,29 +222,19 @@ export function Overlay({ buffer, cards, showDeckLink, showHistory }: Props) {
 }
 
 /**
- * Link to the streamer's deck on the game's website.
+ * The streamer's deck: its name, with copy and open.
  *
  * Sits on the left edge below the player HUD, which is where the game already
- * shows whose deck this is, so the button reads as part of that column rather
- * than as something floating over the board.
- *
- * A real anchor with target="_blank", not a scripted navigation: an extension
- * iframe cannot navigate the page it sits in, and Twitch requires a visible
- * indicator that a link leaves the site -- which the arrow provides.
+ * shows whose deck this is, so it reads as part of that column rather than as
+ * something floating over the board.
  */
-function DeckButton({ deck }: { deck: DeckLink }) {
+function DeckButton({ deck, t }: { deck: DeckLink; t: Strings }) {
   const [name, url] = deck;
   return (
-    <a
-      className="ac-deck"
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={`Open ${name} on atlas-conquest.com`}
-    >
-      <span className="ac-deck-name">{name}</span>
-      <span className="ac-deck-cta">View Deck <span aria-hidden="true">&#8599;</span></span>
-    </a>
+    <div className="ac-deck">
+      <span className="ac-deck-name" title={name}>{name}</span>
+      <DeckActions url={url} t={t} compact />
+    </div>
   );
 }
 
@@ -287,10 +282,10 @@ function HistoryPanel({
             data-kind={entry[HIST.Kind] === HISTORY_KIND.Ability ? "ability" : "play"}
             data-owner={entry[HIST.Owner]}
             data-open={open === id}
-            title={card.name}
+            title={cards.nameOf(card)}
             onClick={() => setOpen((p) => (p === id ? null : id))}
           >
-            <img src={cards.artUrl(card)} alt={card.name} loading="lazy" />
+            <img src={cards.artUrl(card)} alt={cards.nameOf(card)} loading="lazy" />
           </button>
         );
       })}
@@ -313,14 +308,26 @@ interface PanelSource {
   health?: number;
 }
 
+/**
+ * The card, as its render in the viewer's language.
+ *
+ * Only the render, because the render already is the card: name, cost, stats
+ * and rules text are all on it, and repeating them as text beside it would say
+ * everything twice -- in English, under a card in Japanese. What the render
+ * cannot show is the live state of this copy on the board, so that is added.
+ */
 function CardPanel({
-  hit, cards, pinned, onClose,
-}: { hit: PanelSource; cards: CardDatabase; pinned: boolean; onClose: () => void }) {
+  hit, cards, t, pinned, onClose,
+}: { hit: PanelSource; cards: CardDatabase; t: Strings; pinned: boolean; onClose: () => void }) {
   const { card } = hit;
 
   // Flip to the other side when the hex is on the right, so the panel never
   // covers the thing the viewer is pointing at.
   const onRight = hit.left > 55;
+
+  // Live health for a unit on the board, when it differs from what is printed.
+  // A card in hand has none, and an undamaged unit's is already on the render.
+  const damaged = hit.health !== undefined && card.health !== undefined && hit.health !== card.health;
 
   return (
     <div
@@ -329,38 +336,15 @@ function CardPanel({
       style={onRight ? { left: "2%" } : { right: "2%" }}
       onClick={pinned ? onClose : undefined}
     >
-      <img className="ac-card-art" src={cards.artUrl(card)} alt={card.name} loading="lazy" />
+      <img className="ac-card-art" src={cards.artUrl(card)} alt={cards.nameOf(card)} />
 
-      <div className="ac-card-body">
-        <div className="ac-card-head">
-          <span className="ac-card-name">{card.name}</span>
-          {card.cost !== undefined && <span className="ac-card-cost">{card.cost}</span>}
+      {damaged && (
+        <div className="ac-card-health" data-hurt={hit.health! < card.health!}>
+          <span aria-hidden="true">&#9829;</span> {hit.health} / {card.health}
         </div>
+      )}
 
-        {card.type === "MINION" && (
-          <div className="ac-card-stats">
-            <span>{card.attack} ATK</span>
-            <span>{card.speed} SPD</span>
-            {/* Live health for a unit on the board, because that is what the
-                viewer is looking at. A card in hand has none yet, so it shows
-                the printed value rather than a made-up current one. */}
-            <span>
-              {hit.health !== undefined ? `${hit.health} / ${card.health}` : card.health} HP
-            </span>
-          </div>
-        )}
-
-        {card.text && (
-          <p className="ac-card-text"
-             dangerouslySetInnerHTML={{ __html: cardTextToHtml(card.text) }} />
-        )}
-        {card.reminder && (
-          <p className="ac-card-reminder"
-             dangerouslySetInnerHTML={{ __html: cardTextToHtml(card.reminder) }} />
-        )}
-      </div>
-
-      {pinned && <div className="ac-card-hint">click to close</div>}
+      {pinned && <div className="ac-card-hint">{t.close}</div>}
     </div>
   );
 }

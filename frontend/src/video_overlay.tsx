@@ -1,44 +1,25 @@
 import { createRoot } from "react-dom/client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Overlay } from "./Overlay.tsx";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
-import { loadCards, type CardDatabase } from "./cards.ts";
-import {
-  parseBroadcasterConfig, DEFAULT_CONFIG,
-  type Snapshot, type BroadcasterConfig,
-} from "../../shared/protocol.ts";
+import { stringsFor } from "./strings.ts";
+import { useBroadcasterConfig, useCards, useLocale } from "./twitch.ts";
+import type { Snapshot } from "../../shared/protocol.ts";
 import "./overlay.css";
-
 
 const buffer = new SnapshotBuffer();
 
 function App() {
-  const [cards, setCards] = useState<CardDatabase | null>(null);
-  const [config, setConfig] = useState<BroadcasterConfig>(DEFAULT_CONFIG);
+  // Broadcaster settings come from Twitch's Configuration Service, which is
+  // free and hosted by them -- our EBS never sees or stores them.
+  const config = useBroadcasterConfig();
+  const locale = useLocale(config);
+  const cards = useCards(locale);
+
+  useEffect(() => { buffer.setDelay(config.delayMs); }, [config.delayMs]);
 
   useEffect(() => {
-    loadCards().then(setCards).catch((e) => console.error("card data", e));
-
-    const ext = window.Twitch?.ext;
-    if (!ext) return;
-
-    // Broadcaster settings come from Twitch's Configuration Service, which is
-    // free and hosted by them -- our EBS never sees or stores them.
-    //
-    // parseBroadcasterConfig degrades per-field rather than wholesale, so a
-    // config written by a newer version does not reset the streamer's delay.
-    const applyConfig = () => {
-      const next = parseBroadcasterConfig(ext.configuration.broadcaster?.content);
-      buffer.setDelay(next.delayMs);
-      setConfig(next);
-    };
-
-    // onChanged as well as onAuthorized: a streamer adjusting the delay while
-    // live should see it take effect without every viewer reloading.
-    ext.configuration.onChanged(applyConfig);
-    ext.onAuthorized(applyConfig);
-
-    ext.listen("broadcast", (_target, _type, message) => {
+    window.Twitch?.ext.listen("broadcast", (_target, _type, message) => {
       try {
         buffer.ingest(JSON.parse(message) as Snapshot);
       } catch (e) {
@@ -55,6 +36,7 @@ function App() {
     <Overlay
       buffer={buffer}
       cards={cards}
+      t={stringsFor(locale)}
       showDeckLink={config.deckLink}
       showHistory={config.history}
     />

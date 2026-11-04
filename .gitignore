@@ -5,9 +5,8 @@ dist/
 .dev.vars
 .wrangler/
 
-# art/ and data/ are generated: sync.sh --extension downscales the card
-# screenshots from the game repo into them. They ARE committed (GitHub Pages
-# serves them from the repo root), but are never hand-edited.
+# data/cards.json is generated (TwitchCardExporter, copied by sync.sh --extension)
+# and committed, but never hand-edited. Card art is not in this repo: see cdn-out/.
 
 # Locally-issued dev certificates (mkcert). Machine-specific, and the key must
 # never be committed. Regenerate with the command in frontend/vite.config.ts.
@@ -16,3 +15,6 @@ frontend/certs/
 # Build output for a Hosted Test upload. Regenerate with:
 #   cd frontend && npm run build   (then zip dist/ contents at the zip root)
 extension-hosted-test.zip
+
+# Built by scripts/build_cdn.py and uploaded to the card host; never committed.
+cdn-out/

@@ -82,3 +82,26 @@ hr {
   opacity: 0.15;
   margin: 28px 0 16px;
 }
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+label.row + label.row {
+  margin-top: 4px;
+}
+
+label.row input[type="radio"] {
+  accent-color: #9146ff;
+}
+
+select {
+  width: 100%;
+  max-width: 320px;
+  padding: 6px 8px;
+  font: inherit;
+  border-radius: 4px;
+  accent-color: #9146ff;
+}

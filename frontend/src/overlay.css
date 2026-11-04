@@ -57,13 +57,8 @@ html, body, #root {
 
 .ac-card {
   position: absolute;
-  /* Anchored to the TOP, not the bottom.
-     Bottom-anchoring grows a tall card upward, so the first thing pushed off
-     screen is the artwork -- the most useful part -- while the reminder text,
-     the least useful, is always fully visible. Anchoring here inverts that: the
-     art and rules text are always readable, and an unusually long reminder is
-     what gets clipped. Only matters in a small player, where the panel can
-     exceed the video height. */
+  /* Anchored to the top, so in a small player it is the bottom of the card --
+     never the name and cost -- that would be clipped. */
   top: 6%;
   max-height: 88%;
   overflow: hidden;
@@ -88,24 +83,23 @@ html, body, #root {
   border-color: rgba(255, 204, 68, 0.7);
 }
 
-/* Pinned means the viewer deliberately kept it open, so let them reach clipped
-   text. Not while hovering: a scrollbar appearing under a moving pointer is
-   noise, and the hover panel is glanceable rather than readable. */
-.ac-card[data-pinned="true"] .ac-card-body {
-  overflow-y: auto;
-  min-height: 0;
-}
-
-/* flex: none so the art keeps its size when max-height squeezes the column;
+/* flex: none so the render keeps its size when max-height squeezes the column;
    without it the image is the thing flex shrinks first. */
 .ac-card-art { width: 100%; border-radius: 6px; display: block; flex: none; }
-.ac-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.ac-card-name { font-weight: 600; font-size: 15px; }
-.ac-card-cost { color: #6fd3ff; font-weight: 700; }
-.ac-card-stats { display: flex; gap: 10px; opacity: 0.85; font-variant-numeric: tabular-nums; }
-.ac-card-text { margin: 0; }
-.ac-card-reminder { margin: 0; opacity: 0.65; font-style: italic; font-size: 12px; }
 .ac-card-hint { text-align: center; opacity: 0.5; font-size: 11px; }
+
+/* The one thing the render cannot show: this unit's health right now. */
+.ac-card-health {
+  align-self: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ac-card-health[data-hurt="true"] { color: #ff8a80; }
+.ac-card-health[data-hurt="false"] { color: #9be59b; }
 
 @media (prefers-reduced-motion: reduce) {
   .ac-hit { transition: none; }
@@ -140,7 +134,7 @@ html, body, #root {
 }
 
 .ac-deck:hover,
-.ac-deck:focus-visible {
+.ac-deck:focus-within {
   background: rgba(24, 20, 34, 0.96);
   border-color: rgba(255, 204, 68, 0.7);
 }
@@ -154,10 +148,26 @@ html, body, #root {
   text-overflow: ellipsis;
 }
 
-.ac-deck-cta {
-  opacity: 0.7;
+.ac-deck .ac-deck-actions { display: flex; gap: 4px; margin-top: 4px; }
+
+.ac-deck .ac-btn {
+  flex: 1;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
   font-size: 11px;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
 }
+
+.ac-deck .ac-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.ac-deck .ac-btn-primary { border-color: rgba(255, 204, 68, 0.6); }
+
 
 /*
  * Action history.

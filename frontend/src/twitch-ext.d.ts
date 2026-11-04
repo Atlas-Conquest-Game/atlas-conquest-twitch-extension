@@ -16,6 +16,9 @@ declare global {
         /** Fires once the viewer or broadcaster context is established. */
         onAuthorized(cb: (auth: { channelId: string }) => void): void;
 
+        /** Fires with the player's context, and again when parts of it change. */
+        onContext?(cb: (context: { theme?: "light" | "dark" }, changed: string[]) => void): void;
+
         /** Subscribe to a PubSub topic. The overlay listens on "broadcast". */
         listen(
           topic: string,

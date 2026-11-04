@@ -11,6 +11,8 @@
  *     *newer* than what is on screen -- see MotionInterval.
  */
 
+import { isLocale, type LanguageSetting } from "./locale.ts";
+
 export const PROTOCOL_VERSION = 1;
 
 /**
@@ -354,13 +356,28 @@ export interface BroadcasterConfig {
    * would rather viewers saw their actual list, scroll position and all.
    */
   history: boolean;
+  /**
+   * How the deck panel (mobile, where there is no hover) presents the deck: the
+   * full decklist, or only the deck code as its website link. Both copy and open
+   * the same link; "code" is for a streamer who wants it compact.
+   */
+  deckView: DeckView;
+  /**
+   * Card language. "auto" follows each viewer's Twitch language, falling back to
+   * English for languages the game does not ship.
+   */
+  language: LanguageSetting;
 }
+
+export type DeckView = "list" | "code";
 
 export const DEFAULT_CONFIG: BroadcasterConfig = {
   delayMs: 4000,
   boardHover: true,
   deckLink: true,
   history: true,
+  deckView: "list",
+  language: "auto",
 };
 
 /** Widest delay the slider offers. Twitch's own delay tops out around 20s. */
@@ -391,6 +408,10 @@ export function parseBroadcasterConfig(raw: string | undefined | null): Broadcas
     boardHover: typeof source.boardHover === "boolean" ? source.boardHover : DEFAULT_CONFIG.boardHover,
     deckLink: typeof source.deckLink === "boolean" ? source.deckLink : DEFAULT_CONFIG.deckLink,
     history: typeof source.history === "boolean" ? source.history : DEFAULT_CONFIG.history,
+    deckView: source.deckView === "list" || source.deckView === "code"
+      ? source.deckView : DEFAULT_CONFIG.deckView,
+    language: source.language === "auto" || isLocale(source.language)
+      ? source.language : DEFAULT_CONFIG.language,
   };
 }
 

@@ -60,6 +60,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         video_overlay: "video_overlay.html",
+        mobile: "mobile.html",
         config: "config.html",
       },
     },

@@ -4,6 +4,7 @@ import {
   parseBroadcasterConfig, DEFAULT_CONFIG, MAX_DELAY_MS,
   type BroadcasterConfig,
 } from "../../shared/protocol.ts";
+import { LOCALES, NATIVE_NAMES, isLocale } from "../../shared/locale.ts";
 import "./config.css";
 
 /**
@@ -126,6 +127,57 @@ function Config() {
           atlas-conquest.com. Worth knowing that the link resolves to your full
           decklist, so an opponent watching your stream can read it too. Fine for
           most streams; turn it off for tournament play.
+        </p>
+      </section>
+
+      <section>
+        <span className="label">On mobile, show</span>
+        <label className="row">
+          <input
+            type="radio"
+            name="deckView"
+            checked={config.deckView === "list"}
+            onChange={() => update({ deckView: "list" })}
+          />
+          <span>The full decklist</span>
+        </label>
+        <label className="row">
+          <input
+            type="radio"
+            name="deckView"
+            checked={config.deckView === "code"}
+            onChange={() => update({ deckView: "code" })}
+          />
+          <span>Just the deck code</span>
+        </label>
+        <p className="help">
+          Mobile viewers can't hover, so they get a deck panel below the video
+          instead. Either way they can copy your deck link with one tap, paste it
+          into the game, or open it on atlas-conquest.com. The deck code is that
+          link, the same one the game copies.
+        </p>
+      </section>
+
+      <section>
+        <label htmlFor="language">Card language</label>
+        <select
+          id="language"
+          value={config.language}
+          onChange={(e) => {
+            const value = e.target.value;
+            update({ language: value === "auto" || !isLocale(value) ? "auto" : value });
+          }}
+        >
+          <option value="auto">Each viewer's Twitch language</option>
+          {LOCALES.map((code) => (
+            <option key={code} value={code}>{NATIVE_NAMES[code]}</option>
+          ))}
+        </select>
+        <p className="help">
+          Cards, card names and the extension's buttons, in any of the game's
+          eleven languages. The default follows each viewer's own Twitch
+          language and uses English where the game has no translation; pick a
+          language to show everyone the same one.
         </p>
       </section>
 

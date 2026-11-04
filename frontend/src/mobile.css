@@ -1,0 +1,215 @@
+/* Mobile view. Twitch shows it below the video in its apps, in the viewer's
+   light or dark theme, so it follows that theme rather than the overlay's
+   always-dark styling. Sized for one thumb: every target is at least 44px. */
+
+:root {
+  --m-bg: #18181b;
+  --m-surface: #26262c;
+  --m-text: #efeff1;
+  --m-muted: #adadb8;
+  --m-line: rgba(255, 255, 255, 0.1);
+  --m-accent: #f2c14e;
+  --m-accent-text: #1a1400;
+}
+
+.m-root[data-theme="light"] {
+  --m-bg: #ffffff;
+  --m-surface: #f2f2f4;
+  --m-text: #0e0e10;
+  --m-muted: #53535f;
+  --m-line: rgba(0, 0, 0, 0.1);
+  --m-accent: #b8860b;
+  --m-accent-text: #ffffff;
+}
+
+html, body { margin: 0; }
+
+body, .m-root {
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans", "Noto Sans CJK JP", sans-serif;
+}
+
+.m-root {
+  min-height: 100vh;
+  padding: 12px 16px 24px;
+  box-sizing: border-box;
+}
+
+.m-empty {
+  margin: 32px 0;
+  text-align: center;
+  color: var(--m-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.m-commander {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid var(--m-accent);
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--m-surface);
+  cursor: pointer;
+}
+
+/* The render is a whole card; the portrait sits in its upper third. */
+.m-commander img {
+  width: 100%;
+  height: 160%;
+  object-fit: cover;
+  object-position: 50% 18%;
+}
+
+.m-title { min-width: 0; }
+
+.m-title h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.m-sub {
+  margin: 2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--m-muted);
+  font-size: 13px;
+}
+
+.m-code {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--m-muted);
+}
+
+.m-code input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 10px;
+  border: 1px solid var(--m-line);
+  border-radius: 6px;
+  background: var(--m-surface);
+  color: var(--m-text);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Side by side when both labels fit, stacked when they do not. Labels never
+   wrap: a CJK label broken mid-word ("コピ / ー") reads as a rendering fault. */
+.ac-deck-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ac-btn {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--m-line);
+  border-radius: 6px;
+  background: var(--m-surface);
+  color: var(--m-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.ac-btn-primary {
+  background: var(--m-accent);
+  border-color: transparent;
+  color: var(--m-accent-text);
+}
+
+.m-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--m-line);
+}
+
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--m-line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.m-cost {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--m-accent);
+  color: var(--m-accent-text);
+  font-size: 13px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.m-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-count { flex: none; color: var(--m-muted); font-variant-numeric: tabular-nums; }
+
+/* Tap a card for its render. Tapping anywhere closes it. */
+.m-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.m-sheet img {
+  max-width: 100%;
+  max-height: calc(100vh - 100px);
+  object-fit: contain;
+}
+
+.m-sheet .ac-btn { flex: none; min-width: 120px; }

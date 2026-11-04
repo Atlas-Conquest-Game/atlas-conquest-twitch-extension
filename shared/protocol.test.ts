@@ -258,6 +258,17 @@ test("unknown or missing fields fall back individually, not wholesale", () => {
   assert.deepEqual(parseBroadcasterConfig(partial), { ...DEFAULT_CONFIG, delayMs: 9000 });
 });
 
+test("deck view and language are kept when valid and defaulted when not", () => {
+  const good = JSON.stringify({ deckView: "code", language: "pt-BR" });
+  assert.equal(parseBroadcasterConfig(good).deckView, "code");
+  assert.equal(parseBroadcasterConfig(good).language, "pt-BR");
+
+  // "pt" is a Twitch language, not a game locale; a stored value must be one of ours.
+  const bad = JSON.stringify({ deckView: "grid", language: "pt" });
+  assert.equal(parseBroadcasterConfig(bad).deckView, DEFAULT_CONFIG.deckView);
+  assert.equal(parseBroadcasterConfig(bad).language, "auto");
+});
+
 test("implausible delays are clamped rather than trusted", () => {
   // Negative would render snapshots that have not happened yet; enormous would
   // park the overlay before the match started.
