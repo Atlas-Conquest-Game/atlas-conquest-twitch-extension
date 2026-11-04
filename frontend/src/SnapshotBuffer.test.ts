@@ -134,3 +134,23 @@ test("a publisher that never sends keyframes cannot grow the buffer forever", ()
 
   assert.ok(buf.size <= 600, `hard cap holds (was ${buf.size})`);
 });
+
+test("the board clears once the streamer leaves the match", () => {
+  // The game publishes a keyframe every 5s in a match and nothing outside one.
+  const buf = new SnapshotBuffer(4000);
+  buf.ingest(keyframe(10_000, 0, [[1, 7, 0, 0, 5, 0]]), 10_000);
+  buf.ingest(keyframe(15_000, 1, [[1, 7, 0, 0, 5, 0]]), 15_000);
+  assert.ok(buf.stateAt(19_000 + 11_000), "still in the match within the grace period");
+  assert.equal(buf.stateAt(19_000 + 13_000), null, "silence past 12s means no match: draw nothing");
+});
+
+test("a new match after leaving shows the new board, not the old one", () => {
+  const buf = new SnapshotBuffer(0);
+  buf.ingest(keyframe(10_000, 40, [[1, 7, 0, 0, 5, 0]]), 10_000);
+  // Left, went to the deck editor, started again: sequence restarts at 0.
+  buf.ingest(keyframe(60_000, 0, [[3, 9, 1, 1, 4, 0]]), 60_000);
+  const state = buf.stateAt(60_500);
+  assert.ok(state);
+  assert.equal(state.entities.has(1), false);
+  assert.equal(state.entities.get(3)?.[1], 9);
+});

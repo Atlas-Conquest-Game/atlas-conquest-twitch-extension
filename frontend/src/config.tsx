@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   parseBroadcasterConfig, DEFAULT_CONFIG, MAX_DELAY_MS,
   type BroadcasterConfig,
@@ -21,16 +21,41 @@ import "./config.css";
 /** Segment version Twitch stores alongside the content. */
 const CONFIG_VERSION = "1";
 
+/**
+ * Quiet time before a change is written. Twitch rate-limits configuration
+ * writes, and a burst (arrow keys through the language menu, a slider or layout
+ * drag) used to send one write per step: the later ones were dropped, so the
+ * value that stuck was an intermediate one rather than the one picked.
+ */
+const SAVE_AFTER_MS = 700;
+
 function Config() {
   const [config, setConfig] = useState<BroadcasterConfig>(DEFAULT_CONFIG);
   const [connected, setConnected] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  /** The newest unsaved value, if a write is pending. */
+  const pending = useRef<BroadcasterConfig | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+
+  const flush = () => {
+    window.clearTimeout(timer.current);
+    const next = pending.current;
+    pending.current = null;
+    const ext = window.Twitch?.ext;
+    if (!next || !ext) return;
+    ext.configuration.set("broadcaster", CONFIG_VERSION, JSON.stringify(next));
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1500);
+  };
 
   useEffect(() => {
     const ext = window.Twitch?.ext;
     if (!ext) return;
 
     const load = () => {
+      // Twitch echoing back an older value must not undo an edit still waiting to be written.
+      if (pending.current) return;
       setConfig(parseBroadcasterConfig(ext.configuration.broadcaster?.content));
       setConnected(true);
     };
@@ -40,22 +65,27 @@ function Config() {
     // arriving is enough.
     ext.configuration.onChanged(load);
     ext.onAuthorized(load);
+
+    // Closing the dashboard dialog mid-pause still saves the last change.
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flush);
+    };
   }, []);
 
   const update = (patch: Partial<BroadcasterConfig>) => {
-    const next = { ...config, ...patch };
+    const next = { ...(pending.current ?? config), ...patch };
     setConfig(next);
 
-    const ext = window.Twitch?.ext;
-    if (!ext) return;
-
-    // Written on every change rather than behind a Save button. There is no
-    // partial state worth protecting here, and a settings page that silently
-    // discards edits because someone closed the tab is a bad trade for one
-    // fewer write.
-    ext.configuration.set("broadcaster", CONFIG_VERSION, JSON.stringify(next));
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1500);
+    // Saved automatically rather than behind a Save button (a settings page that
+    // discards edits because someone closed the tab is a bad trade), but only
+    // once the streamer pauses, so a burst of changes is one write of the last.
+    pending.current = next;
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(flush, SAVE_AFTER_MS);
   };
 
   // Rendered immediately, with defaults, rather than waiting on Twitch's helper.

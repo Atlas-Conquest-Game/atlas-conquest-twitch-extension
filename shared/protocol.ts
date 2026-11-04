@@ -417,7 +417,8 @@ export const DEFAULT_CONFIG: BroadcasterConfig = {
   history: true,
   deckView: "list",
   language: "auto",
-  deckPos: [0.015, 0.33],
+  // Just below the opponent's stat panel at the left edge, clear of both HUDs.
+  deckPos: [0.022, 0.545],
   cardPos: "auto",
   cardScale: 1,
 };

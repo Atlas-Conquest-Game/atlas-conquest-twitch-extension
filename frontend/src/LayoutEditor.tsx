@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { MIN_CARD_SCALE, MAX_CARD_SCALE, type Point } from "../../shared/protocol.ts";
+import { DEFAULT_CONFIG, MIN_CARD_SCALE, MAX_CARD_SCALE, type Point } from "../../shared/protocol.ts";
 
 /**
  * Where the deck button and the hovered card sit on the stream, set by dragging
@@ -140,7 +140,7 @@ export function LayoutEditor({
         <button
           type="button"
           className="layout-reset"
-          onClick={() => onChange({ deckPos: [0.015, 0.33], cardPos: "auto", cardScale: 1 })}
+          onClick={() => onChange({ deckPos: DEFAULT_CONFIG.deckPos, cardPos: DEFAULT_CONFIG.cardPos, cardScale: DEFAULT_CONFIG.cardScale })}
         >
           Reset layout
         </button>

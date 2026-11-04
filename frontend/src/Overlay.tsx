@@ -292,10 +292,15 @@ function HistoryPanel({
   onUnhover: (key: Target) => void;
   onPin: (key: Target) => void;
 }) {
-  const css = rectToCss(rect);
+  // Newest first, matching the game. Only rows we can draw: a card missing from
+  // the database (content newer than the card host) is skipped, not left blank.
+  const rows = [...entries].reverse().filter((entry) => cards.get(entry[HIST.CardId]) !== undefined);
 
-  // Newest first, matching the game.
-  const rows = [...entries].reverse();
+  // Nothing to show (a fresh match, the mulligan): no panel, rather than an
+  // empty dark box sitting over the game's own history.
+  if (rows.length === 0) return null;
+
+  const css = rectToCss(rect);
 
   return (
     <div

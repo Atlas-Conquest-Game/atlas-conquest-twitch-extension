@@ -34,6 +34,9 @@ export class SnapshotBuffer {
     this.delayMs = Math.max(0, ms);
   }
 
+  /** Silence after which the match is over for the viewer (keyframes come every 5s). */
+  static readonly STALE_MS = 12_000;
+
   /** Milliseconds of history kept. Comfortably past the worst plausible delay. */
   private static readonly RETAIN_MS = 45_000;
 
@@ -108,11 +111,19 @@ export class SnapshotBuffer {
     const t = this.renderTime(now);
 
     let start = -1;
+    let latest = -1;
     for (let i = 0; i < this.snapshots.length; i++) {
       if (this.snapshots[i].t > t) break;
       if (this.snapshots[i].k === 1) start = i;
+      latest = i;
     }
     if (start === -1) return null;
+
+    // Nothing for longer than a match ever goes quiet: the streamer has left the
+    // match (or the game closed), and the game stops publishing outside one. A
+    // keyframe arrives every 5s during play, so this tolerates two lost ones.
+    // Without it the last board, hand and deck button stay drawn over the menus.
+    if (t - this.snapshots[latest].t > SnapshotBuffer.STALE_MS) return null;
 
     let state = emptyBoard();
     for (let i = start; i < this.snapshots.length; i++) {
