@@ -105,6 +105,9 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }:
 
       if (!state?.affine || isMoving) {
         setHits((prev) => (prev.length ? [] : prev));
+        // The boxes go away under a still pointer, so no mouseleave ever comes:
+        // without this the card stays open over the board after the camera moves.
+        setHovered((h) => (h !== null && h[0] === "b" ? null : h));
       } else {
         const basis = state.affine;
         // Viewport radius -> CSS box. Doubled because radius is a half-width.
@@ -134,6 +137,7 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }:
       // independently of the board.
       if (!state || buffer.handMoving(now)) {
         setHandHits((prev) => (prev.length ? [] : prev));
+        setHovered((h) => (h !== null && h[0] === "c" ? null : h));
       } else {
         const next: HandHit[] = [];
         for (const c of state.hand.values() as Iterable<HandTuple>) {
