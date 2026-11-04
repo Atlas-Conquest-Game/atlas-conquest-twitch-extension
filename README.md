@@ -261,10 +261,19 @@ also serves the website's localized card renders. Eleven languages at ~20MB each
 is far past what belongs in a Twitch-hosted bundle.
 
 ```
-twitch/cards.json                    card data + deck code table      5-minute cache
-twitch/i18n/<locale>.json            one language's names and art     5-minute cache
-twitch/<locale>/<card>.<hash>.webp   600x840 render                   immutable
+twitch/cards.json                    card data, deck codes, mentions, tile art   5-minute cache
+twitch/i18n/<locale>.json            one language's names, art, keyword          5-minute cache
+                                     reminders and tile names/text
+twitch/<locale>/<card>.<hash>.webp   600x840 render                              immutable
+twitch/tiles/<tile>.<hash>.webp      tile art                                    immutable
 ```
+
+Hovering a card shows what the game shows beside it: the keyword reminder box
+(keywords and reminder-only abilities, never the card's own text), the tiles it
+names, and the cards it creates. The text is rendered by the game itself in each
+language (`TwitchCardExporter` switches the game's localization per locale), and
+the website's card previews (`site/js/cardpreview.js`) read the same files, so
+the game, the site and the extension show the same words.
 
 Art names carry a hash of the source render, so a viewer downloads each card
 once and a re-rendered card is a new file. A language missing a card's render or
@@ -273,8 +282,8 @@ name falls back to English for that card.
 To publish new cards or renders:
 
 ```bash
-# in Unity: Atlas Conquest > Export > Twitch Card Data, then copy to data/
-python scripts/build_cdn.py      # reads ../atlas-conquest: CardScreenshots/<locale>/, Localization tables
+../atlas-conquest/tools/twitch-export.sh   # the game's export: cards.json, i18n/, tiles/ (editor open or closed)
+python scripts/build_cdn.py      # reads ../atlas-conquest: TwitchExport/, CardScreenshots/<locale>/, Localization tables
 scripts/upload_cdn.sh            # rclone to R2; art first, then the indexes
 ```
 

@@ -5,6 +5,7 @@ import {
   type BroadcasterConfig,
 } from "../../shared/protocol.ts";
 import { LOCALES, NATIVE_NAMES, isLocale } from "../../shared/locale.ts";
+import { LayoutEditor } from "./LayoutEditor.tsx";
 import "./config.css";
 
 /**
@@ -192,9 +193,22 @@ function Config() {
         </label>
         <p className="help">
           Draws a readable copy of your action history over the one on screen, so
-          viewers can scroll it and click an entry to see the card. Turn it off to
-          leave your own list visible instead.
+          viewers can scroll it and hover or click an entry to see the card. Turn it
+          off to leave your own list visible instead.
         </p>
+      </section>
+
+      <section>
+        <span className="label">Layout</span>
+        <p className="help">
+          Drag the deck button to where it fits your scene, and choose where the
+          hovered card appears. Viewers' overlays follow as soon as you let go, so you
+          can adjust while live and check it on your stream.
+        </p>
+        <LayoutEditor
+          value={{ deckPos: config.deckPos, cardPos: config.cardPos, cardScale: config.cardScale }}
+          onChange={(patch) => update(patch)}
+        />
       </section>
 
       <p className="muted small">

@@ -58,42 +58,134 @@ html, body, #root {
 .ac-card {
   position: absolute;
   /* Anchored to the top, so in a small player it is the bottom of the card --
-     never the name and cost -- that would be clipped. */
+     never the name and cost -- that would be clipped. Overridden by the
+     streamer's fixed position when they set one. */
   top: 6%;
   max-height: 88%;
-  overflow: hidden;
-  width: min(300px, 26%);
   pointer-events: none;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 10px;
-  background: rgba(14, 12, 20, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  flex-direction: row;
+  align-items: flex-start;
+  gap: calc(8px * var(--ac-card-scale, 1));
+  /* No box: the render is a card on transparency, and a panel behind it showed
+     as a dark slab around the card. The shadow keeps its edge legible over the
+     board instead. */
   color: #f2efe9;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-card-scale, 1));
   line-height: 1.4;
 }
+
+/* Extras open toward the middle of the video, away from the card's edge. */
+.ac-card[data-extras-left="true"] { flex-direction: row-reverse; }
+
+/* vw, not %: the iframe is exactly the video, so vw is the video's width even
+   though this column's parent shrinks to fit its content. */
+.ac-card-main {
+  flex: none;
+  width: calc(min(300px, 26vw) * var(--ac-card-scale, 1));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * Beside the card, as the game shows it on hover: keyword reminders, named
+ * tiles, created or named cards. Dark and opaque, unlike the card: this is text
+ * over arbitrary video, and has to read on any of it.
+ */
+.ac-card-extras {
+  flex: none;
+  width: calc(min(250px, 21vw) * var(--ac-card-scale, 1));
+  max-height: calc(88vh);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ac-card-scale, 1));
+}
+
+.ac-reminder,
+.ac-tile {
+  padding: calc(8px * var(--ac-card-scale, 1)) calc(10px * var(--ac-card-scale, 1));
+  border-radius: 8px;
+  background: rgba(20, 16, 12, 0.94);
+  border: 1px solid rgba(214, 178, 110, 0.55);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  font-size: calc(12px * var(--ac-card-scale, 1));
+  line-height: 1.35;
+}
+
+.ac-reminder p { margin: 0; }
+.ac-reminder p + p { margin-top: 0.55em; }
+.ac-reminder b, .ac-tile b { color: #f2c86b; }
+
+.ac-tile { display: flex; gap: 8px; align-items: flex-start; }
+.ac-tile-art { flex: none; width: 28%; display: block; }
+.ac-tile-body { min-width: 0; }
+.ac-tile-name { font-weight: 700; color: #f2c86b; margin-bottom: 2px; }
+
+.ac-mentions { display: flex; flex-wrap: wrap; gap: 4px; }
+.ac-mention {
+  width: calc(50% - 2px);
+  display: block;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.6));
+}
+
+/* The game's inline stat icons, as small coloured pips carrying their number. */
+.ac-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  padding: 0 0.15em;
+  margin: 0 0.1em;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: -0.2em;
+  color: #fff;
+  box-sizing: border-box;
+}
+.ac-icon:empty::before { content: "\25CF"; font-size: 0.7em; }
+.ac-icon[data-icon="mana"] { background: #2f6fd6; }
+.ac-icon[data-icon="power"] { background: #c2492f; }
+.ac-icon[data-icon="speed"] { background: #3f9b4f; }
+.ac-icon[data-icon="health"] { background: #c23a4e; }
+.ac-icon[data-icon="durability"] { background: #8a8f98; }
+.ac-icon[data-icon="intellect"] { background: #7b4fc9; }
+.ac-icon[data-icon="dominion"] { background: #c99a2e; }
 
 .ac-card[data-pinned="true"] {
   pointer-events: auto;
   cursor: pointer;
-  border-color: rgba(255, 204, 68, 0.7);
+}
+
+.ac-card[data-pinned="true"] .ac-card-art {
+  filter: drop-shadow(0 0 3px rgba(255, 204, 68, 0.95)) drop-shadow(0 10px 22px rgba(0, 0, 0, 0.7));
 }
 
 /* flex: none so the render keeps its size when max-height squeezes the column;
    without it the image is the thing flex shrinks first. */
-.ac-card-art { width: 100%; border-radius: 6px; display: block; flex: none; }
-.ac-card-hint { text-align: center; opacity: 0.5; font-size: 11px; }
+.ac-card-art {
+  width: 100%;
+  display: block;
+  flex: none;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.7));
+}
+.ac-card-hint {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(14, 12, 20, 0.8);
+  font-size: 11px;
+}
 
 /* The one thing the render cannot show: this unit's health right now. */
 .ac-card-health {
   align-self: center;
   padding: 2px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(14, 12, 20, 0.85);
   font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -106,17 +198,11 @@ html, body, #root {
 }
 
 /*
- * Deck link.
- *
- * Left edge, below the player HUD panels. The position is a constant rather than
- * something published from the game: the HUD does not move, and publishing a
- * rect for it would put a per-frame cost on the wire to place a button that
- * never needs to move.
+ * Deck link. Placed by the streamer on the config page (inline left/top), since
+ * where it fits depends on their scene, not on the game.
  */
 .ac-deck {
   position: absolute;
-  left: 1.5%;
-  top: 33%;
   max-width: 20%;
   pointer-events: auto;
   display: flex;

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   cellToViewport, hexRadius, E, HAND, HIST, HISTORY_KIND,
-  type EntityTuple, type DeckLink, type HandTuple, type HistoryTuple, type Rect,
+  type EntityTuple, type DeckLink, type HandTuple, type HistoryTuple, type Rect, type Point,
 } from "../../shared/protocol.ts";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
-import { type CardDatabase, type CardData } from "./cards.ts";
+import { cardTextToHtml, reminderHtml, type CardDatabase, type CardData } from "./cards.ts";
 import { DeckActions } from "./DeckActions.tsx";
 import type { Strings } from "./strings.ts";
 
@@ -17,7 +17,21 @@ interface Props {
   showDeckLink: boolean;
   /** Streamer's setting for the interactive action-history panel. */
   showHistory: boolean;
+  /** Streamer's layout: where the deck button and the hovered card go, and card size. */
+  layout: Layout;
 }
+
+export interface Layout {
+  deckPos: Point;
+  cardPos: "auto" | Point;
+  cardScale: number;
+}
+
+/**
+ * What the pointer is on. Keyed by source as well as id, since board handles,
+ * hand handles and history ids come from different spaces and may coincide.
+ */
+type Target = `b${number}` | `c${number}` | `h${number}`;
 
 interface Hit {
   handle: number;
@@ -58,15 +72,18 @@ function rectToCss(r: Rect) {
  * snapshot. A pan that ends between two messages still has to release the
  * hitboxes at the right moment.
  */
-export function Overlay({ buffer, cards, t, showDeckLink, showHistory }: Props) {
+export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }: Props) {
   const [hits, setHits] = useState<Hit[]>([]);
   const [handHits, setHandHits] = useState<HandHit[]>([]);
   const [history, setHistory] = useState<HistoryTuple[]>([]);
   const [historyRect, setHistoryRect] = useState<Rect | null>(null);
   const [deck, setDeck] = useState<DeckLink | null>(null);
   const [moving, setMoving] = useState(false);
-  const [hovered, setHovered] = useState<number | null>(null);
-  const [pinned, setPinned] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<Target | null>(null);
+  const [pinned, setPinned] = useState<Target | null>(null);
+  const hover = (key: Target) => setHovered(key);
+  const unhover = (key: Target) => setHovered((h) => (h === key ? null : h));
+  const togglePin = (key: Target) => setPinned((p) => (p === key ? null : key));
   const frame = useRef(0);
 
   useEffect(() => {
@@ -151,8 +168,10 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory }: Props) 
   }, [buffer, cards]);
 
   const showing = pinned ?? hovered;
-  const showingHit = hits.find((h) => h.handle === showing)
-    ?? handHits.find((h) => h.handle === showing);
+  const showingHit: PanelSource | undefined = showing === null ? undefined
+    : showing[0] === "b" ? hits.find((h) => `b${h.handle}` === showing)
+    : showing[0] === "c" ? handHits.find((h) => `c${h.handle}` === showing)
+    : historySource(showing, history, historyRect, cards);
 
   return (
     <div className="ac-overlay" data-moving={moving}>
@@ -167,15 +186,15 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory }: Props) 
             aspectRatio: "1",
           }}
           aria-label={cards.nameOf(hit.card)}
-          onMouseEnter={() => setHovered(hit.handle)}
-          onMouseLeave={() => setHovered((h) => (h === hit.handle ? null : h))}
-          onClick={() => setPinned((p) => (p === hit.handle ? null : hit.handle))}
+          onMouseEnter={() => hover(`b${hit.handle}`)}
+          onMouseLeave={() => unhover(`b${hit.handle}`)}
+          onClick={() => togglePin(`b${hit.handle}`)}
           onContextMenu={(e) => {
             // Right-click mirrors the in-game magnify. Suppress the browser menu,
             // but plain click is bound too -- right-click on a web page surprises
             // people, and on a trackpad it is awkward.
             e.preventDefault();
-            setPinned((p) => (p === hit.handle ? null : hit.handle));
+            togglePin(`b${hit.handle}`);
           }}
         />
       ))}
@@ -193,27 +212,36 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory }: Props) 
             width: `${hit.width}%`,
             height: `${hit.height}%`,
           }}
-          onMouseEnter={() => setHovered(hit.handle)}
-          onMouseLeave={() => setHovered((h) => (h === hit.handle ? null : h))}
+          onMouseEnter={() => hover(`c${hit.handle}`)}
+          onMouseLeave={() => unhover(`c${hit.handle}`)}
           onClick={(e) => {
             e.preventDefault();
-            setPinned((p) => (p === hit.handle ? null : hit.handle));
+            togglePin(`c${hit.handle}`);
           }}
         />
       ))}
 
       {showHistory && historyRect && (
-        <HistoryPanel rect={historyRect} entries={history} cards={cards} />
+        <HistoryPanel
+          rect={historyRect}
+          entries={history}
+          cards={cards}
+          active={showing}
+          onHover={hover}
+          onUnhover={unhover}
+          onPin={togglePin}
+        />
       )}
 
-      {showDeckLink && deck && <DeckButton deck={deck} t={t} />}
+      {showDeckLink && deck && <DeckButton deck={deck} t={t} pos={layout.deckPos} />}
 
       {showingHit && (
         <CardPanel
           hit={showingHit}
           cards={cards}
           t={t}
-          pinned={pinned === showingHit.handle}
+          layout={layout}
+          pinned={pinned !== null && pinned === showing}
           onClose={() => setPinned(null)}
         />
       )}
@@ -224,14 +252,14 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory }: Props) 
 /**
  * The streamer's deck: its name, with copy and open.
  *
- * Sits on the left edge below the player HUD, which is where the game already
- * shows whose deck this is, so it reads as part of that column rather than as
- * something floating over the board.
+ * Wherever the streamer put it on the config page (default: the left edge below
+ * the player HUD). Every scene is laid out differently, so a fixed spot is
+ * always wrong for someone.
  */
-function DeckButton({ deck, t }: { deck: DeckLink; t: Strings }) {
+function DeckButton({ deck, t, pos }: { deck: DeckLink; t: Strings; pos: Point }) {
   const [name, url] = deck;
   return (
-    <div className="ac-deck">
+    <div className="ac-deck" style={{ left: `${pos[0] * 100}%`, top: `${pos[1] * 100}%` }}>
       <span className="ac-deck-name" title={name}>{name}</span>
       <DeckActions url={url} t={t} compact />
     </div>
@@ -253,10 +281,18 @@ function DeckButton({ deck, t }: { deck: DeckLink; t: Strings }) {
  * through at a different scroll offset, which reads as a rendering fault.
  */
 function HistoryPanel({
-  rect, entries, cards,
-}: { rect: Rect; entries: HistoryTuple[]; cards: CardDatabase }) {
+  rect, entries, cards, active, onHover, onUnhover, onPin,
+}: {
+  rect: Rect;
+  entries: HistoryTuple[];
+  cards: CardDatabase;
+  /** The target the card panel is showing, to highlight its row. */
+  active: Target | null;
+  onHover: (key: Target) => void;
+  onUnhover: (key: Target) => void;
+  onPin: (key: Target) => void;
+}) {
   const css = rectToCss(rect);
-  const [open, setOpen] = useState<number | null>(null);
 
   // Newest first, matching the game.
   const rows = [...entries].reverse();
@@ -281,9 +317,11 @@ function HistoryPanel({
             className="ac-history-row"
             data-kind={entry[HIST.Kind] === HISTORY_KIND.Ability ? "ability" : "play"}
             data-owner={entry[HIST.Owner]}
-            data-open={open === id}
-            title={cards.nameOf(card)}
-            onClick={() => setOpen((p) => (p === id ? null : id))}
+            data-open={active === `h${id}`}
+            aria-label={cards.nameOf(card)}
+            onMouseEnter={() => onHover(`h${id}`)}
+            onMouseLeave={() => onUnhover(`h${id}`)}
+            onClick={() => onPin(`h${id}`)}
           >
             <img src={cards.artUrl(card)} alt={cards.nameOf(card)} loading="lazy" />
           </button>
@@ -308,43 +346,98 @@ interface PanelSource {
   health?: number;
 }
 
+/** The card behind a history row, positioned at the history column. */
+function historySource(
+  key: Target, history: HistoryTuple[], rect: Rect | null, cards: CardDatabase,
+): PanelSource | undefined {
+  const entry = history.find((e) => `h${e[HIST.Id]}` === key);
+  const card = entry ? cards.get(entry[HIST.CardId]) : undefined;
+  if (!card) return undefined;
+  return { card, left: rect ? rectToCss(rect).left : 100 };
+}
+
 /**
- * The card, as its render in the viewer's language.
+ * The card, as its render in the viewer's language, with what the game shows
+ * beside it on hover.
  *
- * Only the render, because the render already is the card: name, cost, stats
- * and rules text are all on it, and repeating them as text beside it would say
- * everything twice -- in English, under a card in Japanese. What the render
- * cannot show is the live state of this copy on the board, so that is added.
+ * The render already is the card -- name, cost, stats and rules text -- so none
+ * of that is repeated. Beside it, as in the game: the keyword reminder box
+ * (keywords and reminder-only abilities, never the card's own text), the tiles
+ * it names, and the cards it creates or names. Plus the one thing a render cannot
+ * show: this unit's live health.
  */
 function CardPanel({
-  hit, cards, t, pinned, onClose,
-}: { hit: PanelSource; cards: CardDatabase; t: Strings; pinned: boolean; onClose: () => void }) {
+  hit, cards, t, layout, pinned, onClose,
+}: {
+  hit: PanelSource; cards: CardDatabase; t: Strings; layout: Layout; pinned: boolean; onClose: () => void;
+}) {
   const { card } = hit;
 
-  // Flip to the other side when the hex is on the right, so the panel never
-  // covers the thing the viewer is pointing at.
+  // The streamer's fixed spot, or by default the side away from the thing
+  // hovered, so the card never covers what the viewer is pointing at.
   const onRight = hit.left > 55;
+  const place: CSSProperties = layout.cardPos === "auto"
+    ? (onRight ? { left: "2%" } : { right: "2%" })
+    : { left: `${layout.cardPos[0] * 100}%`, top: `${layout.cardPos[1] * 100}%` };
+  // The extras open toward the middle of the video, away from the edge the card
+  // sits against.
+  const extrasLeft = layout.cardPos === "auto" ? !onRight : layout.cardPos[0] > 0.5;
 
   // Live health for a unit on the board, when it differs from what is printed.
   // A card in hand has none, and an undamaged unit's is already on the render.
   const damaged = hit.health !== undefined && card.health !== undefined && hit.health !== card.health;
 
+  const reminder = cards.reminderOf(card);
+  const tiles = cards.tilesOf(card);
+  const mentions = cards.mentionsOf(card);
+  const hasExtras = reminder.length > 0 || tiles.length > 0 || mentions.length > 0;
+
   return (
     <div
       className="ac-card"
       data-pinned={pinned}
-      style={onRight ? { left: "2%" } : { right: "2%" }}
+      data-extras-left={extrasLeft}
+      style={{ ...place, ["--ac-card-scale" as string]: layout.cardScale }}
       onClick={pinned ? onClose : undefined}
     >
-      <img className="ac-card-art" src={cards.artUrl(card)} alt={cards.nameOf(card)} />
+      <div className="ac-card-main">
+        <img className="ac-card-art" src={cards.artUrl(card)} alt={cards.nameOf(card)} />
 
-      {damaged && (
-        <div className="ac-card-health" data-hurt={hit.health! < card.health!}>
-          <span aria-hidden="true">&#9829;</span> {hit.health} / {card.health}
+        {damaged && (
+          <div className="ac-card-health" data-hurt={hit.health! < card.health!}>
+            <span aria-hidden="true">&#9829;</span> {hit.health} / {card.health}
+          </div>
+        )}
+
+        {pinned && <div className="ac-card-hint">{t.close}</div>}
+      </div>
+
+      {hasExtras && (
+        <div className="ac-card-extras">
+          {reminder && (
+            <div className="ac-reminder" dangerouslySetInnerHTML={{ __html: reminderHtml(reminder) }} />
+          )}
+
+          {tiles.map((tile) => (
+            <div className="ac-tile" key={tile.key}>
+              {tile.art && <img className="ac-tile-art" src={tile.art} alt="" />}
+              <div className="ac-tile-body">
+                <div className="ac-tile-name">{tile.name}</div>
+                <div className="ac-tile-text" dangerouslySetInnerHTML={{ __html: cardTextToHtml(tile.text) }} />
+              </div>
+            </div>
+          ))}
+
+          {mentions.length > 0 && (
+            <div className="ac-mentions">
+              {mentions.map((m) => (
+                <img key={m.id} className="ac-mention" src={cards.artUrl(m)} alt={cards.nameOf(m)} />
+              ))}
+            </div>
+          )}
         </div>
       )}
-
-      {pinned && <div className="ac-card-hint">{t.close}</div>}
     </div>
   );
 }
+

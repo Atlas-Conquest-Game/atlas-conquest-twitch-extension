@@ -27,7 +27,23 @@ export interface CardData {
   durability?: number;
   legendary?: boolean;
   text?: string;
+  /** English keyword reminder box. Use CardDatabase.reminderOf for the viewer's language. */
   reminder?: string;
+  /** Wire ids of the cards this one creates or names (tokens), as the in-game magnify pages. */
+  mentions?: number[];
+  /** Keys of the tiles this card names. */
+  tiles?: string[];
+}
+
+/** A tile a card names, in the viewer's language. */
+export interface TileInfo {
+  key: string;
+  name: string;
+  /** Rich text, as card text: render with cardTextToHtml. */
+  text: string;
+  mana: number;
+  traversable: boolean;
+  art?: string;
 }
 
 export interface CardDatabase {
@@ -39,18 +55,35 @@ export interface CardDatabase {
   nameOf(card: CardData): string;
   /** The card's render in the viewer's language, English where it has none. */
   artUrl(card: CardData): string;
+  /**
+   * The keyword reminder box the game shows beside a hovered card: keywords and
+   * reminder-only abilities, not the card's own text. Empty when it has none.
+   */
+  reminderOf(card: CardData): string;
+  /** Cards this one creates or names, that this card data knows. */
+  mentionsOf(card: CardData): CardData[];
+  /** Tiles this card names. */
+  tilesOf(card: CardData): TileInfo[];
 }
+
+interface TileText { name: string; text: string; mana: number; traversable: boolean }
 
 export interface CardsPayload {
   /** Index = deck code id, value = wire id (0 for a retired id). */
   deckCodes?: number[];
   cards: CardData[];
+  /** Tile key -> art path on the card host. */
+  tileArt?: Record<string, string>;
 }
 
 /** One language's i18n/<locale>.json: wire id -> name, and wire id -> art path. */
 export interface LocaleData {
   names: Record<string, string>;
   art: Record<string, string>;
+  /** Wire id -> keyword reminder box, rendered by the game in this language. */
+  reminders?: Record<string, string>;
+  /** Tile key -> name and text in this language. */
+  tiles?: Record<string, TileText>;
 }
 
 // R2, on the game's own zone, beside the website's localized card renders.
@@ -119,6 +152,16 @@ export function buildCardDatabase(
       const path = local?.art[card.id] ?? english?.art[card.id];
       return path ? `${cdnBase}/${path}` : `${cdnBase}/en/${card.art}.webp`;
     },
+    reminderOf: (card) => local?.reminders?.[card.id] ?? english?.reminders?.[card.id] ?? card.reminder ?? "",
+    mentionsOf: (card) => (card.mentions ?? [])
+      .map((id) => byId.get(id))
+      .filter((c): c is CardData => c !== undefined && c.id !== card.id),
+    tilesOf: (card) => (card.tiles ?? []).flatMap((key) => {
+      const t = local?.tiles?.[key] ?? english?.tiles?.[key];
+      if (!t) return [];
+      const art = payload.tileArt?.[key];
+      return [{ key, ...t, art: art ? `${cdnBase}/${art}` : undefined }];
+    }),
   };
 }
 
@@ -170,6 +213,35 @@ export function resolveDeck(
   };
 }
 
+/**
+ * The game's reminder box text as HTML: one paragraph per keyword, as the box is
+ * laid out in game (entries are separated by a blank line).
+ */
+export function reminderHtml(reminder: string): string {
+  return reminder
+    .split(/\n{2,}/)
+    .filter((part) => part.trim().length > 0)
+    .map((part) => `<p>${cardTextToHtml(part.trim())}</p>`)
+    .join("");
+}
+
+/**
+ * The game's inline stat icons, `<sprite name="mana_3">` (Util.ReplaceIconTokens):
+ * mana, power, speed, health, durability, intellect, dominion, each optionally
+ * with a number or X. Drawn as a coloured pip with the number, as the card frame
+ * does, rather than dropped -- "Costs  less" with the icon missing reads as a typo.
+ */
+const ICONS = new Set(["mana", "power", "speed", "health", "durability", "intellect", "dominion"]);
+
+function iconHtml(tagInner: string): string {
+  const m = /name\s*=\s*"?([a-z]+)(?:_(\d+|X))?"?/i.exec(tagInner);
+  if (!m || !ICONS.has(m[1].toLowerCase())) return "";
+  const kind = m[1].toLowerCase();
+  const value = m[2] ?? "";
+  // Both parts come from a fixed set or match \d+|X, so nothing authored reaches the markup.
+  return `<span class="ac-icon" data-icon="${kind}">${value}</span>`;
+}
+
 /** Inline emphasis a browser can honour. Everything else TMP-specific is dropped. */
 const ALLOWED_TAGS = new Set(["b", "i", "u", "s"]);
 
@@ -215,6 +287,8 @@ export function cardTextToHtml(text: string): string {
 
     if (ALLOWED_TAGS.has(name)) {
       out += isClosing ? `</${name}>` : `<${name}>`;
+    } else if (name === "sprite" && !isClosing) {
+      out += iconHtml(inner);
     }
     // Anything else is dropped along with its contents' markup, keeping the text.
 

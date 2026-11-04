@@ -57,6 +57,10 @@ export default defineConfig({
   // reference has to be relative.
   base: "./",
   build: {
+    // Twitch review requires human-readable JavaScript (Extensions policy 2.5), and
+    // a reviewer reads the uploaded zip, not this repo. Unminified, the whole bundle
+    // is still well under the 1MB mobile budget, and Twitch's CDN compresses it.
+    minify: false,
     rollupOptions: {
       input: {
         video_overlay: "video_overlay.html",

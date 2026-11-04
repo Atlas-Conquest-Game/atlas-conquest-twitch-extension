@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   applySnapshot, emptyBoard, isMoving, cellToViewport, hexRadius,
   mergeIntervals, estimateClockSkew,
-  parseBroadcasterConfig, clampDelay, DEFAULT_CONFIG, MAX_DELAY_MS,
+  parseBroadcasterConfig, clampDelay, DEFAULT_CONFIG, MAX_DELAY_MS, sanitizeDeckLink,
   REGION, HAND, HIST, MAX_HISTORY,
   type Snapshot, type Affine, type HandTuple, type HistoryTuple, type MotionInterval,
 } from "./protocol.ts";
@@ -258,6 +258,20 @@ test("unknown or missing fields fall back individually, not wholesale", () => {
   assert.deepEqual(parseBroadcasterConfig(partial), { ...DEFAULT_CONFIG, delayMs: 9000 });
 });
 
+test("layout positions are clamped onto the video and fall back per field", () => {
+  const stored = JSON.stringify({ deckPos: [1.4, -0.2], cardPos: [0.7, 0.1], cardScale: 9 });
+  const c = parseBroadcasterConfig(stored);
+  assert.deepEqual(c.deckPos, [1, 0]);
+  assert.deepEqual(c.cardPos, [0.7, 0.1]);
+  assert.equal(c.cardScale, 1.6);
+
+  const junk = parseBroadcasterConfig(JSON.stringify({ deckPos: "left", cardPos: [1], cardScale: "big" }));
+  assert.deepEqual(junk.deckPos, DEFAULT_CONFIG.deckPos);
+  assert.equal(junk.cardPos, "auto");
+  assert.equal(junk.cardScale, 1);
+  assert.equal(parseBroadcasterConfig(JSON.stringify({ cardPos: "auto" })).cardPos, "auto");
+});
+
 test("deck view and language are kept when valid and defaulted when not", () => {
   const good = JSON.stringify({ deckView: "code", language: "pt-BR" });
   assert.equal(parseBroadcasterConfig(good).deckView, "code");
@@ -292,11 +306,44 @@ test("a keyframe carries the deck link into board state", () => {
 test("a delta without a deck link keeps the one already known", () => {
   // Deltas omit the deck because it cannot change mid-match. If the fold dropped
   // it, the button would blink out between keyframes.
-  let s = applySnapshot(emptyBoard(), { ...keyframe(0), d: ["Ramp", "https://example/deck"] });
+  const link: [string, string] = ["Ramp", "https://atlas-conquest.com/decks/milo-sunstone/?code=wo1T%3AK8DA"];
+  let s = applySnapshot(emptyBoard(), { ...keyframe(0), d: link });
   assert.ok(s);
   s = applySnapshot(s, { v: 1, t: 2, s: 1, k: 0, e: [] });
   assert.ok(s);
-  assert.deepEqual(s.deck, ["Ramp", "https://example/deck"]);
+  assert.deepEqual(s.deck, link);
+});
+
+test("only a deck page on the website is accepted as a deck link", () => {
+  // The URL comes from the streamer's client and becomes an href, so anything
+  // but the exact shape DeckUtils.CreateDeckUrl writes is dropped.
+  const code = encodeURIComponent("wo1TdGFydGVyIEdvYmxpbnM=:K8DAAgwtwJACDCpAEAMMM8AAAwwvwEAEDEiAwAcMR4AQAAw0gAA=");
+  assert.ok(sanitizeDeckLink(["Goblins", `https://atlas-conquest.com/decks/captain-greenbeard/?code=${code}`]));
+  for (const url of [
+    "javascript:alert(1)",
+    "http://atlas-conquest.com/decks/x/?code=abc",
+    "https://atlas-conquest.com.evil.example/decks/x/?code=abc",
+    "https://evil.example/?https://atlas-conquest.com/decks/x/?code=abc",
+    "https://atlas-conquest.com/decks/x/?code=abc\"><script>",
+    "https://atlas-conquest.com/press.html",
+  ]) {
+    assert.equal(sanitizeDeckLink(["x", url]), null, url);
+  }
+  assert.equal(sanitizeDeckLink("not a tuple"), null);
+  assert.equal(sanitizeDeckLink([1, 2]), null);
+});
+
+test("a rejected deck link clears the deck rather than showing a stale one", () => {
+  let s = applySnapshot(emptyBoard(), {
+    ...keyframe(0), d: ["A", "https://atlas-conquest.com/decks/x/?code=abc"] });
+  s = applySnapshot(s!, { ...keyframe(5), s: 1, d: ["B", "javascript:alert(1)"] });
+  assert.equal(s!.deck, null);
+});
+
+test("long deck names are capped on a character boundary", () => {
+  const [name] = sanitizeDeckLink(["🐉".repeat(80), "https://atlas-conquest.com/decks/x/?code=abc"])!;
+  assert.equal(Array.from(name).length, 64);
+  assert.ok(name.endsWith("🐉"));
 });
 
 // --- regions -----------------------------------------------------------------

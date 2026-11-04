@@ -79,3 +79,27 @@ test("ampersands and stray angle brackets are escaped", () => {
 test("newlines become breaks", () => {
   assert.equal(cardTextToHtml("one\ntwo"), "one<br>two");
 });
+
+test("stat icons become pips with their number; unknown sprites are dropped", () => {
+  assert.equal(cardTextToHtml('Costs <sprite name="mana_3"> less'),
+    'Costs <span class="ac-icon" data-icon="mana">3</span> less');
+  assert.equal(cardTextToHtml('<sprite name="health_X">'), '<span class="ac-icon" data-icon="health">X</span>');
+  assert.equal(cardTextToHtml('<sprite name="speed">'), '<span class="ac-icon" data-icon="speed"></span>');
+  assert.equal(cardTextToHtml('<sprite name="evil\" onload=\"x">'), "");
+  assert.equal(cardTextToHtml("<sprite=3>"), "");
+});
+
+test("reminders, mentions and tiles resolve in the viewer's language with English behind", () => {
+  const card = { ...payload.cards[0], mentions: [payload.cards[1].id, 123, payload.cards[0].id], tiles: ["lava", "gone"] };
+  const data: CardsPayload = { ...payload, cards: [card, ...payload.cards.slice(1)], tileArt: { lava: "tiles/lava.abc.webp" } };
+  const english = { names: {}, art: {}, reminders: { [card.id]: "<b>Haste</b>: moves at once." },
+    tiles: { lava: { name: "Lava", text: "Burns.", mana: 1, traversable: true } } };
+  const local = { names: {}, art: {}, reminders: {}, tiles: { lava: { name: "Lava (de)", text: "Brennt.", mana: 1, traversable: true } } };
+  const db = buildCardDatabase(data, { cdnBase: "https://h/t", locale: "de", local, english });
+  assert.equal(db.reminderOf(card), "<b>Haste</b>: moves at once.", "falls back to English");
+  assert.deepEqual(db.mentionsOf(card).map((c) => c.id), [payload.cards[1].id], "unknown and self dropped");
+  const tiles = db.tilesOf(card);
+  assert.equal(tiles.length, 1);
+  assert.equal(tiles[0].name, "Lava (de)");
+  assert.equal(tiles[0].art, "https://h/t/tiles/lava.abc.webp");
+});

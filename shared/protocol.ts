@@ -26,6 +26,27 @@ export const PROTOCOL_VERSION = 1;
  */
 export type DeckLink = [name: string, url: string];
 
+/** The only place a deck link may point: a deck page on the game's website. */
+const DECK_URL = /^https:\/\/atlas-conquest\.com\/decks\/[a-z0-9-]+\/\?code=[A-Za-z0-9%+/=:._~-]+$/;
+
+/**
+ * A deck link from the wire, or null if it is not one we will show.
+ *
+ * The snapshot comes from the streamer's own game client, which a modified
+ * client controls, and the URL ends up in an href every viewer can click. So it
+ * is held to the exact shape DeckUtils.CreateDeckUrl produces -- https, the
+ * website's deck pages, a deck code -- rather than trusted. The name is shown as
+ * text only, and capped so a long one cannot crowd the panel.
+ */
+export function sanitizeDeckLink(value: unknown): DeckLink | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [name, url] = value;
+  if (typeof name !== "string" || typeof url !== "string") return null;
+  if (url.length > 2048 || !DECK_URL.test(url)) return null;
+  // By code point, so the cap never splits an emoji or a rare kanji in half.
+  return [Array.from(name).slice(0, 64).join(""), url];
+}
+
 /**
  * A rectangle in Unity viewport coordinates: x/y from the bottom-left, 0..1.
  *
@@ -219,7 +240,7 @@ export function applySnapshot(prev: BoardState, snap: Snapshot): BoardState | nu
     seq: snap.s,
     // Carried forward when absent, so a delta does not blank the deck button
     // between keyframes.
-    deck: snap.d ?? prev.deck,
+    deck: snap.d !== undefined ? sanitizeDeckLink(snap.d) : prev.deck,
     hand,
     history,
     historyRect: snap.nr ?? prev.historyRect,
@@ -367,9 +388,27 @@ export interface BroadcasterConfig {
    * English for languages the game does not ship.
    */
   language: LanguageSetting;
+  /**
+   * Top-left of the deck button, as fractions of the video (0..1 across, 0..1
+   * down). Streamers lay out their scenes differently, so it is theirs to place.
+   */
+  deckPos: Point;
+  /**
+   * Where the hovered card appears: "auto" beside the thing hovered (the side
+   * away from it), or a fixed top-left point as fractions of the video.
+   */
+  cardPos: "auto" | Point;
+  /** Card size relative to the default, 0.6 to 1.6. */
+  cardScale: number;
 }
 
 export type DeckView = "list" | "code";
+
+/** [x, y] as fractions of the video, from its top-left. */
+export type Point = [x: number, y: number];
+
+export const MIN_CARD_SCALE = 0.6;
+export const MAX_CARD_SCALE = 1.6;
 
 export const DEFAULT_CONFIG: BroadcasterConfig = {
   delayMs: 4000,
@@ -378,6 +417,9 @@ export const DEFAULT_CONFIG: BroadcasterConfig = {
   history: true,
   deckView: "list",
   language: "auto",
+  deckPos: [0.015, 0.33],
+  cardPos: "auto",
+  cardScale: 1,
 };
 
 /** Widest delay the slider offers. Twitch's own delay tops out around 20s. */
@@ -412,7 +454,21 @@ export function parseBroadcasterConfig(raw: string | undefined | null): Broadcas
       ? source.deckView : DEFAULT_CONFIG.deckView,
     language: source.language === "auto" || isLocale(source.language)
       ? source.language : DEFAULT_CONFIG.language,
+    deckPos: parsePoint(source.deckPos) ?? DEFAULT_CONFIG.deckPos,
+    cardPos: source.cardPos === "auto" ? "auto" : parsePoint(source.cardPos) ?? DEFAULT_CONFIG.cardPos,
+    cardScale: typeof source.cardScale === "number" && Number.isFinite(source.cardScale)
+      ? Math.min(Math.max(source.cardScale, MIN_CARD_SCALE), MAX_CARD_SCALE)
+      : DEFAULT_CONFIG.cardScale,
   };
+}
+
+/** A stored point, clamped onto the video, or null if it is not one. */
+function parsePoint(value: unknown): Point | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [x, y] = value;
+  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const clamp = (v: number) => Math.min(Math.max(v, 0), 1);
+  return [clamp(x), clamp(y)];
 }
 
 /**

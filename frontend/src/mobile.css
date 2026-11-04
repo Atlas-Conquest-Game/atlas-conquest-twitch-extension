@@ -213,3 +213,44 @@ body, .m-root {
 }
 
 .m-sheet .ac-btn { flex: none; min-width: 120px; }
+
+/* Beside the tapped card, as on the overlay and in game: keyword reminders,
+   named tiles, created cards. Scrolls with the sheet when it is long. */
+.m-sheet { overflow-y: auto; justify-content: flex-start; padding-top: 24px; }
+.m-sheet img { max-height: 60vh; }
+.m-extras {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #f2efe9;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.m-reminder, .m-tile {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(20, 16, 12, 0.96);
+  border: 1px solid rgba(214, 178, 110, 0.55);
+}
+.m-reminder p { margin: 0; }
+.m-reminder p + p { margin-top: 0.55em; }
+.m-reminder b, .m-tile b, .m-tile strong { color: #f2c86b; }
+.m-tile { display: flex; gap: 10px; align-items: flex-start; }
+.m-tile img { width: 64px; max-height: none; flex: none; }
+.m-mentions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.m-mentions img { width: calc(50% - 3px); max-height: none; }
+
+.ac-icon {
+  display: inline-grid; place-items: center; min-width: 1.35em; height: 1.35em; padding: 0 0.15em;
+  margin: 0 0.1em; border-radius: 999px; font-size: 0.85em; font-weight: 800; line-height: 1;
+  vertical-align: -0.2em; color: #fff; box-sizing: border-box;
+}
+.ac-icon[data-icon="mana"] { background: #2f6fd6; }
+.ac-icon[data-icon="power"] { background: #c2492f; }
+.ac-icon[data-icon="speed"] { background: #3f9b4f; }
+.ac-icon[data-icon="health"] { background: #c23a4e; }
+.ac-icon[data-icon="durability"] { background: #8a8f98; }
+.ac-icon[data-icon="intellect"] { background: #7b4fc9; }
+.ac-icon[data-icon="dominion"] { background: #c99a2e; }

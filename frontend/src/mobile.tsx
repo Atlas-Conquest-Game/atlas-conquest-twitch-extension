@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useEffect, useMemo, useState } from "react";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
-import { resolveDeck, type CardData, type CardDatabase } from "./cards.ts";
+import { cardTextToHtml, reminderHtml, resolveDeck, type CardData, type CardDatabase } from "./cards.ts";
 import { DeckActions } from "./DeckActions.tsx";
 import { stringsFor, type Strings } from "./strings.ts";
 import { useBroadcasterConfig, useCards, useLocale, useTheme } from "./twitch.ts";
@@ -124,10 +124,38 @@ function DeckPanel({
       {open && (
         <div className="m-sheet" role="dialog" aria-label={cards.nameOf(open)} onClick={() => setOpen(null)}>
           <img src={cards.artUrl(open)} alt={cards.nameOf(open)} />
+          <CardExtras card={open} cards={cards} />
           <button type="button" className="ac-btn">{t.close}</button>
         </div>
       )}
     </>
+  );
+}
+
+/** The keyword reminders, named tiles and created cards, as on the overlay and in game. */
+function CardExtras({ card, cards }: { card: CardData; cards: CardDatabase }) {
+  const reminder = cards.reminderOf(card);
+  const tiles = cards.tilesOf(card);
+  const mentions = cards.mentionsOf(card);
+  if (!reminder && tiles.length === 0 && mentions.length === 0) return null;
+  return (
+    <div className="m-extras" onClick={(e) => e.stopPropagation()}>
+      {reminder && <div className="m-reminder" dangerouslySetInnerHTML={{ __html: reminderHtml(reminder) }} />}
+      {tiles.map((tile) => (
+        <div className="m-tile" key={tile.key}>
+          {tile.art && <img src={tile.art} alt="" />}
+          <div>
+            <strong>{tile.name}</strong>
+            <div dangerouslySetInnerHTML={{ __html: cardTextToHtml(tile.text) }} />
+          </div>
+        </div>
+      ))}
+      {mentions.length > 0 && (
+        <div className="m-mentions">
+          {mentions.map((m) => <img key={m.id} src={cards.artUrl(m)} alt={cards.nameOf(m)} />)}
+        </div>
+      )}
+    </div>
   );
 }
 

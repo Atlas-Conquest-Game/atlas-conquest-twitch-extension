@@ -3,9 +3,11 @@
 Everything the viewer's browser fetches at runtime, other than the bundle Twitch
 hosts, comes from here:
 
-    cdn-out/twitch/cards.json              card data + deck code table (short cache)
-    cdn-out/twitch/i18n/<locale>.json      that language's card names and art files
+    cdn-out/twitch/cards.json              card data, deck code table, tile art (short cache)
+    cdn-out/twitch/i18n/<locale>.json      that language's card names, art files, keyword
+                                           reminders and tile names/text
     cdn-out/twitch/<locale>/<card>.<hash>.webp   600x840 render (cached forever)
+    cdn-out/twitch/tiles/<tile>.<hash>.webp      tile art (cached forever)
 
 Art filenames carry a hash of their bytes, so they are served `immutable` and a
 viewer downloads each card once; a re-rendered card gets a new name, and the
@@ -15,7 +17,8 @@ re-running after one card changes uploads one file per language.
 Inputs, from the game repo beside this one (the workspace layout):
     CardScreenshots/<code>/<card>.png          renders, one folder per language
     atlas-conquest/Assets/Resources/Localization/<code>.json   shipped translations
-and this repo's data/cards.json (TwitchCardExporter output).
+    TwitchExport/cards.json, i18n/<code>.json, tiles/<tile>.png   TwitchCardExporter
+                                               (tools/twitch-export.sh in the game repo)
 
     python scripts/build_cdn.py                 # every language
     python scripts/build_cdn.py --only de,ja    # some (cards.json is always written)
@@ -89,12 +92,13 @@ def card_names(code: str, cards: list[dict]) -> dict[str, str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--only", default="", help="comma list of locale codes")
-    ap.add_argument("--cards", type=Path, default=REPO / "data" / "cards.json")
+    ap.add_argument("--export", type=Path, default=GAME / "TwitchExport",
+                    help="TwitchCardExporter output folder (cards.json, i18n/, tiles/)")
     ap.add_argument("--out", type=Path, default=REPO / "cdn-out" / "twitch")
     args = ap.parse_args(argv)
 
     locales = [c for c in LOCALES if not args.only or c in args.only.split(",")]
-    payload = json.loads(args.cards.read_text(encoding="utf-8"))
+    payload = json.loads((args.export / "cards.json").read_text(encoding="utf-8"))
     cards = payload["cards"]
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "i18n").mkdir(exist_ok=True)
@@ -104,6 +108,22 @@ def main(argv=None) -> int:
     payload["version"] = 2
     payload["locales"] = LOCALES
     payload.pop("artExtension", None)
+
+    # Tile art, for the tiles cards name (a lava field, a village). Hashed like card art.
+    tile_dir = args.out / "tiles"
+    tile_dir.mkdir(exist_ok=True)
+    tile_art = {}
+    for png in sorted((args.export / "tiles").glob("*.png")):
+        digest = hashlib.sha256(png.read_bytes()).hexdigest()[:10]
+        dest = tile_dir / f"{png.stem}.{digest}.webp"
+        if not dest.exists():
+            img = Image.open(png).convert("RGBA")
+            buf = io.BytesIO()
+            img.save(buf, "WEBP", quality=QUALITY, method=6)
+            dest.write_bytes(buf.getvalue())
+        tile_art[png.stem] = f"tiles/{dest.name}"
+    payload["tileArt"] = tile_art
+
     (args.out / "cards.json").write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
@@ -131,10 +151,17 @@ def main(argv=None) -> int:
                     art[card_id] = rel
 
             names = card_names(code, cards)
+            # Keyword reminders and tile text, rendered by the game per language. A missing
+            # file (an older export) leaves them out; the viewer falls back to English.
+            game_locale = args.export / "i18n" / f"{code}.json"
+            extra = json.loads(game_locale.read_text(encoding="utf-8")) if game_locale.exists() else {}
             (args.out / "i18n" / f"{folder(code)}.json").write_text(
-                json.dumps({"names": names, "art": art}, ensure_ascii=False, separators=(",", ":")),
+                json.dumps({"names": names, "art": art,
+                            "reminders": extra.get("reminders", {}), "tiles": extra.get("tiles", {})},
+                           ensure_ascii=False, separators=(",", ":")),
                 encoding="utf-8")
-            print(f"  {code}: {len(art)} renders, {len(names)} names"
+            print(f"  {code}: {len(art)} renders, {len(names)} names, "
+                  f"{len(extra.get('reminders', {}))} reminders, {len(extra.get('tiles', {}))} tiles"
                   + (f"; no render for {len(missing)}: {', '.join(missing[:6])}" if missing else ""))
 
     return 1 if failed else 0

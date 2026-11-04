@@ -39,6 +39,7 @@ function App() {
       t={stringsFor(locale)}
       showDeckLink={config.deckLink}
       showHistory={config.history}
+      layout={{ deckPos: config.deckPos, cardPos: config.cardPos, cardScale: config.cardScale }}
     />
   );
 }
