@@ -247,10 +247,10 @@ body, .m-root {
   margin: 0 0.1em; border-radius: 999px; font-size: 0.85em; font-weight: 800; line-height: 1;
   vertical-align: -0.2em; color: #fff; box-sizing: border-box;
 }
-.ac-icon[data-icon="mana"] { background: #2f6fd6; }
-.ac-icon[data-icon="power"] { background: #c2492f; }
-.ac-icon[data-icon="speed"] { background: #3f9b4f; }
+.ac-icon[data-icon="mana"] { background: #1f7a45; }
+.ac-icon[data-icon="power"] { background: #3b78c4; }
+.ac-icon[data-icon="speed"] { background: #5aa63a; }
 .ac-icon[data-icon="health"] { background: #c23a4e; }
-.ac-icon[data-icon="durability"] { background: #8a8f98; }
-.ac-icon[data-icon="intellect"] { background: #7b4fc9; }
-.ac-icon[data-icon="dominion"] { background: #c99a2e; }
+.ac-icon[data-icon="durability"] { background: #5b5f66; }
+.ac-icon[data-icon="intellect"] { background: #2b4f86; }
+.ac-icon[data-icon="dominion"] { background: #6a3fc9; }

@@ -46,6 +46,18 @@ export interface TileInfo {
   art?: string;
 }
 
+/** An activated ability, in the viewer's language, as the game's history hover shows it. */
+export interface AbilityInfo {
+  name: string;
+  /** Rich text with "~" already filled in: render with cardTextToHtml. */
+  text: string;
+  /** The ability's glyph, drawn as a mask over its stamp colours. */
+  icon?: string;
+  /** Stamp colours: the disc, and the glyph. */
+  bg: string;
+  fg: string;
+}
+
 export interface CardDatabase {
   readonly locale: Locale;
   get(id: number): CardData | undefined;
@@ -55,6 +67,13 @@ export interface CardDatabase {
   nameOf(card: CardData): string;
   /** The card's render in the viewer's language, English where it has none. */
   artUrl(card: CardData): string;
+  /**
+   * The illustration alone, without frame or text, as the game's history rows
+   * show it. The render where there is none, so a row is never empty.
+   */
+  artworkUrl(card: CardData): string;
+  /** The activated ability `id` (a history row's), as used by `card`. */
+  abilityOf(id: number, card: CardData): AbilityInfo | undefined;
   /**
    * The keyword reminder box the game shows beside a hovered card: keywords and
    * reminder-only abilities, not the card's own text. Empty when it has none.
@@ -74,6 +93,10 @@ export interface CardsPayload {
   cards: CardData[];
   /** Tile key -> art path on the card host. */
   tileArt?: Record<string, string>;
+  /** Wire id -> the illustration alone (history rows). */
+  artwork?: Record<string, string>;
+  /** Ability id -> icon path and stamp colours. */
+  abilities?: Record<string, { icon?: string; bg: string; fg: string }>;
 }
 
 /** One language's i18n/<locale>.json: wire id -> name, and wire id -> art path. */
@@ -84,6 +107,10 @@ export interface LocaleData {
   reminders?: Record<string, string>;
   /** Tile key -> name and text in this language. */
   tiles?: Record<string, TileText>;
+  /** Ability id -> name and text in this language, "~" standing for the unit's short name. */
+  abilities?: Record<string, { name: string; text: string }>;
+  /** Wire id -> short name, where a card has one ("Viessa" for "Soultaker Viessa"). */
+  short?: Record<string, string>;
 }
 
 // R2, on the game's own zone, beside the website's localized card renders.
@@ -139,6 +166,11 @@ export function buildCardDatabase(
   const { cdnBase = DEFAULT_CDN, locale = "en", local = null, english = null } = opts;
   const byId = new Map(payload.cards.map((c) => [c.id, c]));
   const deckCodes = payload.deckCodes ?? [];
+  const nameOf = (card: CardData) => local?.names[card.id] ?? card.name;
+  const artUrl = (card: CardData) => {
+    const path = local?.art[card.id] ?? english?.art[card.id];
+    return path ? `${cdnBase}/${path}` : `${cdnBase}/en/${card.art}.webp`;
+  };
 
   return {
     locale,
@@ -147,10 +179,26 @@ export function buildCardDatabase(
       const id = deckCodes[code];
       return id ? byId.get(id) : undefined;
     },
-    nameOf: (card) => local?.names[card.id] ?? card.name,
-    artUrl: (card) => {
-      const path = local?.art[card.id] ?? english?.art[card.id];
-      return path ? `${cdnBase}/${path}` : `${cdnBase}/en/${card.art}.webp`;
+    nameOf,
+    artUrl,
+    artworkUrl: (card) => {
+      const path = payload.artwork?.[card.id];
+      return path ? `${cdnBase}/${path}` : artUrl(card);
+    },
+    abilityOf: (id, card) => {
+      const words = local?.abilities?.[id] ?? english?.abilities?.[id];
+      if (!words) return undefined;
+      const look = payload.abilities?.[id];
+      // The game's "~": the unit's short name in this language, else its full name.
+      // A local short name only: an English one beside a translated full name would mix languages.
+      const self = local ? (local.short?.[card.id] ?? nameOf(card)) : (english?.short?.[card.id] ?? nameOf(card));
+      return {
+        name: words.name,
+        text: words.text.replace(/~/g, self),
+        icon: look?.icon ? `${cdnBase}/${look.icon}` : undefined,
+        bg: look?.bg ?? "#d5e6da",
+        fg: look?.fg ?? "#5b7362",
+      };
     },
     reminderOf: (card) => local?.reminders?.[card.id] ?? english?.reminders?.[card.id] ?? card.reminder ?? "",
     mentionsOf: (card) => (card.mentions ?? [])

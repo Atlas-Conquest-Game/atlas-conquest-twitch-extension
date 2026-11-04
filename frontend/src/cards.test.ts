@@ -103,3 +103,36 @@ test("reminders, mentions and tiles resolve in the viewer's language with Englis
   assert.equal(tiles[0].name, "Lava (de)");
   assert.equal(tiles[0].art, "https://h/t/tiles/lava.abc.webp");
 });
+
+test("an ability resolves in the viewer's language with ~ as the unit's short name", () => {
+  const card = payload.cards.find((c) => c.name === "Acid Rain")!;
+  const data: CardsPayload = { ...payload, abilities: { 7: { icon: "abilities/archery.x.webp", bg: "#111111", fg: "#eeeeee" } } };
+  const english = { names: {}, art: {}, abilities: { 7: { name: "Archery", text: "~ deals 2." } } };
+  const local = {
+    names: { [card.id]: "Säureregen" }, art: {},
+    abilities: { 7: { name: "Bogenschießen", text: "~ verursacht 2." } },
+    short: { [card.id]: "Regen" },
+  };
+  const de = buildCardDatabase(data, { cdnBase: "https://h/t", locale: "de", local, english });
+  assert.deepEqual(de.abilityOf(7, card), {
+    name: "Bogenschießen", text: "Regen verursacht 2.",
+    icon: "https://h/t/abilities/archery.x.webp", bg: "#111111", fg: "#eeeeee",
+  });
+
+  // No short name: the full localized name. No translation: English words, still the local name.
+  const bare = buildCardDatabase(data, {
+    cdnBase: "https://h/t", locale: "de", local: { names: { [card.id]: "Säureregen" }, art: {} }, english,
+  });
+  assert.equal(bare.abilityOf(7, card)?.text, "Säureregen deals 2.");
+  assert.equal(bare.abilityOf(99, card), undefined, "an unknown ability is no ability");
+});
+
+test("history art is the illustration alone, falling back to the render", () => {
+  const card = payload.cards.find((c) => c.name === "Acid Rain")!;
+  const english = { names: {}, art: { [card.id]: "en/acid-rain.abc.webp" } };
+  const withArt = buildCardDatabase({ ...payload, artwork: { [card.id]: "artwork/acid-rain.1.webp" } },
+    { cdnBase: "https://h/t", english });
+  assert.equal(withArt.artworkUrl(card), "https://h/t/artwork/acid-rain.1.webp");
+  const without = buildCardDatabase({ ...payload, artwork: {} }, { cdnBase: "https://h/t", english });
+  assert.equal(without.artworkUrl(card), "https://h/t/en/acid-rain.abc.webp");
+});

@@ -71,13 +71,16 @@ export const HISTORY_KIND = { Play: 0, Ability: 1, Discard: 2, Reveal: 3 } as co
 export type HistoryKind = (typeof HISTORY_KIND)[keyof typeof HISTORY_KIND];
 
 /**
- * One row of the action history: `[id, cardId, kind, owner]`.
+ * One row of the action history: `[id, cardId, kind, owner, abilityId]`.
+ *
+ * `abilityId` names the ability for an activation (0 for anything else): the card
+ * says whose ability it was, not which, and a unit can carry several.
  *
  * Append-only, which is the ideal delta shape -- a snapshot carries the entries
  * added since the last one and never resends the rest.
  */
-export type HistoryTuple = [number, number, number, number];
-export const HIST = { Id: 0, CardId: 1, Kind: 2, Owner: 3 } as const;
+export type HistoryTuple = [number, number, number, number, number];
+export const HIST = { Id: 0, CardId: 1, Kind: 2, Owner: 3, Ability: 4 } as const;
 
 /** Most rows the frontend keeps. Matches the game's own cap. */
 export const MAX_HISTORY = 40;

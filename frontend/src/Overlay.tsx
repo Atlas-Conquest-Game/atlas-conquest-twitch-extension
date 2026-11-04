@@ -4,7 +4,7 @@ import {
   type EntityTuple, type DeckLink, type HandTuple, type HistoryTuple, type Rect, type Point,
 } from "../../shared/protocol.ts";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
-import { cardTextToHtml, reminderHtml, type CardDatabase, type CardData } from "./cards.ts";
+import { cardTextToHtml, reminderHtml, type AbilityInfo, type CardDatabase, type CardData } from "./cards.ts";
 import { DeckActions } from "./DeckActions.tsx";
 import type { Strings } from "./strings.ts";
 
@@ -238,6 +238,7 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }:
       {showingHit && (
         <CardPanel
           hit={showingHit}
+          column={historyRect ? columnEdges(historyRect) : undefined}
           cards={cards}
           t={t}
           layout={layout}
@@ -316,19 +317,23 @@ function HistoryPanel({
         const card = cards.get(entry[HIST.CardId]);
         if (!card) return null;
         const id = entry[HIST.Id];
+        const ability = entry[HIST.Kind] === HISTORY_KIND.Ability
+          ? cards.abilityOf(entry[HIST.Ability], card) : undefined;
         return (
           <button
             key={id}
             className="ac-history-row"
-            data-kind={entry[HIST.Kind] === HISTORY_KIND.Ability ? "ability" : "play"}
+            data-kind={ability ? "ability" : "play"}
             data-owner={entry[HIST.Owner]}
             data-open={active === `h${id}`}
-            aria-label={cards.nameOf(card)}
+            aria-label={ability ? `${cards.nameOf(card)}: ${ability.name}` : cards.nameOf(card)}
             onMouseEnter={() => onHover(`h${id}`)}
             onMouseLeave={() => onUnhover(`h${id}`)}
             onClick={() => onPin(`h${id}`)}
           >
-            <img src={cards.artUrl(card)} alt={cards.nameOf(card)} loading="lazy" />
+            {/* The illustration alone, as the game's rows show it: no frame, no text. */}
+            <img src={cards.artworkUrl(card)} alt="" loading="lazy" />
+            {ability?.icon && <AbilityStamp ability={ability} className="ac-history-stamp" />}
           </button>
         );
       })}
@@ -349,16 +354,49 @@ interface PanelSource {
   left: number;
   /** Live health, for a unit on the board. Absent for a card in hand. */
   health?: number;
+  /** For a history row that was an ability: which one, shown above the reminders. */
+  ability?: AbilityInfo;
+  /**
+   * A history row. The panel then sits right beside the history column, on its
+   * inner side, rather than at the far edge of the screen where the viewer's eye
+   * is not.
+   */
+  fromHistory?: true;
 }
 
-/** The card behind a history row, positioned at the history column. */
+/** The history column's left and right edges, in CSS % of the video. */
+interface Column { left: number; right: number }
+
+function columnEdges(rect: Rect): Column {
+  const css = rectToCss(rect);
+  return { left: css.left, right: css.left + css.width };
+}
+
+/** The card behind a history row, placed beside the history column. */
 function historySource(
   key: Target, history: HistoryTuple[], rect: Rect | null, cards: CardDatabase,
 ): PanelSource | undefined {
   const entry = history.find((e) => `h${e[HIST.Id]}` === key);
   const card = entry ? cards.get(entry[HIST.CardId]) : undefined;
-  if (!card) return undefined;
-  return { card, left: rect ? rectToCss(rect).left : 100 };
+  if (!entry || !card) return undefined;
+  const ability = entry[HIST.Kind] === HISTORY_KIND.Ability
+    ? cards.abilityOf(entry[HIST.Ability], card) : undefined;
+  return { card, ability, left: rect ? rectToCss(rect).left : 100, fromHistory: true };
+}
+
+/** An ability's stamp, as the game draws it: the glyph tinted on a coloured disc. */
+function AbilityStamp({ ability, className }: { ability: AbilityInfo; className: string }) {
+  return (
+    <span className={className} style={{ background: ability.bg }} aria-hidden="true">
+      <span
+        style={{
+          background: ability.fg,
+          maskImage: `url("${ability.icon}")`,
+          WebkitMaskImage: `url("${ability.icon}")`,
+        }}
+      />
+    </span>
+  );
 }
 
 /**
@@ -372,21 +410,40 @@ function historySource(
  * show: this unit's live health.
  */
 function CardPanel({
-  hit, cards, t, layout, pinned, onClose,
+  hit, column, cards, t, layout, pinned, onClose,
 }: {
-  hit: PanelSource; cards: CardDatabase; t: Strings; layout: Layout; pinned: boolean; onClose: () => void;
+  hit: PanelSource;
+  /** Where the game's history column is, which the panel never covers. */
+  column?: Column;
+  cards: CardDatabase; t: Strings; layout: Layout; pinned: boolean; onClose: () => void;
 }) {
   const { card } = hit;
 
   // The streamer's fixed spot, or by default the side away from the thing
   // hovered, so the card never covers what the viewer is pointing at.
   const onRight = hit.left > 55;
-  const place: CSSProperties = layout.cardPos === "auto"
-    ? (onRight ? { left: "2%" } : { right: "2%" })
-    : { left: `${layout.cardPos[0] * 100}%`, top: `${layout.cardPos[1] * 100}%` };
-  // The extras open toward the middle of the video, away from the edge the card
-  // sits against.
-  const extrasLeft = layout.cardPos === "auto" ? !onRight : layout.cardPos[0] > 0.5;
+  const top: CSSProperties = layout.cardPos === "auto" ? {} : { top: `${layout.cardPos[1] * 100}%` };
+  const columnOnRight = column !== undefined && column.left + column.right > 100;
+  // An edge to sit against: the history column's inner side when the column is on
+  // that edge of the screen, otherwise just in from the edge itself.
+  const rightEdge = column && columnOnRight ? `calc(${100 - column.left}% + 0.5vw)` : "2%";
+  const leftEdge = column && !columnOnRight ? `calc(${column.right}% + 0.5vw)` : "2%";
+  let place: CSSProperties;
+  let extrasLeft: boolean;
+  if (hit.fromHistory && column) {
+    // A history row: hard against the column's inner edge, extras nearest it, so
+    // the eye goes from the row to the reminder and then the card. Here whatever
+    // the streamer's spot: the list is what the viewer is running their pointer along.
+    place = columnOnRight ? { ...top, right: rightEdge } : { ...top, left: leftEdge };
+    extrasLeft = !columnOnRight;
+  } else {
+    place = layout.cardPos === "auto"
+      ? (onRight ? { left: leftEdge } : { right: rightEdge })
+      : { left: `${layout.cardPos[0] * 100}%`, ...top };
+    // The extras open toward the middle of the video, away from the edge the card
+    // sits against.
+    extrasLeft = layout.cardPos === "auto" ? !onRight : layout.cardPos[0] > 0.5;
+  }
 
   // Live health for a unit on the board, when it differs from what is printed.
   // A card in hand has none, and an undamaged unit's is already on the render.
@@ -395,7 +452,8 @@ function CardPanel({
   const reminder = cards.reminderOf(card);
   const tiles = cards.tilesOf(card);
   const mentions = cards.mentionsOf(card);
-  const hasExtras = reminder.length > 0 || tiles.length > 0 || mentions.length > 0;
+  const { ability } = hit;
+  const hasExtras = ability !== undefined || reminder.length > 0 || tiles.length > 0 || mentions.length > 0;
 
   return (
     <div
@@ -419,6 +477,17 @@ function CardPanel({
 
       {hasExtras && (
         <div className="ac-card-extras">
+          {/* What was activated, first: the card says whose ability it was, this says which. */}
+          {ability && (
+            <div className="ac-ability">
+              <div className="ac-ability-head">
+                {ability.icon && <AbilityStamp ability={ability} className="ac-ability-stamp" />}
+                <span className="ac-ability-name">{ability.name}</span>
+              </div>
+              <div className="ac-ability-text" dangerouslySetInnerHTML={{ __html: cardTextToHtml(ability.text) }} />
+            </div>
+          )}
+
           {reminder && (
             <div className="ac-reminder" dangerouslySetInnerHTML={{ __html: reminderHtml(reminder) }} />
           )}

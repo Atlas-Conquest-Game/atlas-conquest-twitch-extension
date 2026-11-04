@@ -8,6 +8,8 @@ hosts, comes from here:
                                            reminders and tile names/text
     cdn-out/twitch/<locale>/<card>.<hash>.webp   600x840 render (cached forever)
     cdn-out/twitch/tiles/<tile>.<hash>.webp      tile art (cached forever)
+    cdn-out/twitch/artwork/<card>.<hash>.webp    the illustration alone, for history rows
+    cdn-out/twitch/abilities/<key>.<hash>.webp   activated ability icons (history row badge)
 
 Art filenames carry a hash of their bytes, so they are served `immutable` and a
 viewer downloads each card once; a re-rendered card gets a new name, and the
@@ -17,7 +19,7 @@ re-running after one card changes uploads one file per language.
 Inputs, from the game repo beside this one (the workspace layout):
     CardScreenshots/<code>/<card>.png          renders, one folder per language
     atlas-conquest/Assets/Resources/Localization/<code>.json   shipped translations
-    TwitchExport/cards.json, i18n/<code>.json, tiles/<tile>.png   TwitchCardExporter
+    TwitchExport/cards.json, i18n/<code>.json, tiles/, artwork/, abilities/   TwitchCardExporter
                                                (tools/twitch-export.sh in the game repo)
 
     python scripts/build_cdn.py                 # every language
@@ -78,6 +80,43 @@ def build_one(job: tuple[str, str, str]) -> tuple[str, str, str | None]:
         return card_id, "", f"{src_p}: {e}"
 
 
+# History rows are small squares; 160px covers them on a high-DPI screen.
+ARTWORK = 160
+# Ability glyphs are drawn as a mask in a small badge.
+ICON = 64
+
+
+def encode_square(job: tuple[str, str, int]) -> tuple[str, str, str | None]:
+    """(png path, out dir, size) -> (stem, relative path, error). Hashed like the renders."""
+    src, out_dir, size = job
+    src_p, out_p = Path(src), Path(out_dir)
+    try:
+        digest = hashlib.sha256(src_p.read_bytes()).hexdigest()[:10]
+        dest = out_p / f"{src_p.stem}.{digest}.webp"
+        if not dest.exists():
+            img = Image.open(src_p).convert("RGBA")
+            img.thumbnail((size, size), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, "WEBP", quality=QUALITY, method=6)
+            dest.write_bytes(buf.getvalue())
+        return src_p.stem, f"{out_p.name}/{dest.name}", None
+    except Exception as e:
+        return src_p.stem, "", f"{src_p}: {e}"
+
+
+def encode_folder(pool, src_dir: Path, out_dir: Path, size: int) -> dict[str, str]:
+    """Every PNG in src_dir -> {stem: relative path}."""
+    out_dir.mkdir(exist_ok=True)
+    jobs = [(str(p), str(out_dir), size) for p in sorted(src_dir.glob("*.png"))] if src_dir.exists() else []
+    result = {}
+    for stem, rel, err in pool.map(encode_square, jobs, chunksize=8):
+        if err:
+            print(f"  !! {err}", file=sys.stderr)
+        else:
+            result[stem] = rel
+    return result
+
+
 def card_names(code: str, cards: list[dict]) -> dict[str, str]:
     """Wire id -> localized name. Missing entries fall back to English at runtime."""
     if code == "en":
@@ -124,11 +163,23 @@ def main(argv=None) -> int:
         tile_art[png.stem] = f"tiles/{dest.name}"
     payload["tileArt"] = tile_art
 
-    (args.out / "cards.json").write_text(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-
     failed = 0
     with ProcessPoolExecutor() as pool:
+        # The illustration alone, for history rows: wire id -> path. Not per language.
+        artwork = encode_folder(pool, args.export / "artwork", args.out / "artwork", ARTWORK)
+        payload["artwork"] = {str(c["id"]): artwork[c["art"]] for c in cards if c["art"] in artwork}
+        # Activated abilities: wire id -> icon and stamp colours. Names and text are per language.
+        icons = encode_folder(pool, args.export / "abilities", args.out / "abilities", ICON)
+        payload["abilities"] = {
+            str(a["id"]): {"bg": a["bg"], "fg": a["fg"], **({"icon": icons[a["key"]]} if a["key"] in icons else {})}
+            for a in payload.get("abilities", [])
+        }
+        print(f"  artwork: {len(payload['artwork'])}/{len(cards)} cards; "
+              f"abilities: {len(payload['abilities'])} ({len(icons)} icons)")
+
+        (args.out / "cards.json").write_text(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
         for code in locales:
             src_dir = GAME / "CardScreenshots" / code
             out_dir = args.out / folder(code)
@@ -157,7 +208,8 @@ def main(argv=None) -> int:
             extra = json.loads(game_locale.read_text(encoding="utf-8")) if game_locale.exists() else {}
             (args.out / "i18n" / f"{folder(code)}.json").write_text(
                 json.dumps({"names": names, "art": art,
-                            "reminders": extra.get("reminders", {}), "tiles": extra.get("tiles", {})},
+                            "reminders": extra.get("reminders", {}), "tiles": extra.get("tiles", {}),
+                            "abilities": extra.get("abilities", {}), "short": extra.get("short", {})},
                            ensure_ascii=False, separators=(",", ":")),
                 encoding="utf-8")
             print(f"  {code}: {len(art)} renders, {len(names)} names, "

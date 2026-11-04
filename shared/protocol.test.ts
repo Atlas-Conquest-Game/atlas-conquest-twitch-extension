@@ -394,13 +394,13 @@ test("a keyframe replaces the hand, a delta patches it", () => {
 test("history appends across deltas and is capped", () => {
   // Append-only is the ideal delta shape, but a long match must not grow the
   // list without bound in a browser that may be open for hours.
-  let s = applySnapshot(emptyBoard(), { ...keyframe(0), n: [[1, 10, 0, 0]] });
+  let s = applySnapshot(emptyBoard(), { ...keyframe(0), n: [[1, 10, 0, 0, 0]] });
   assert.ok(s);
 
   let lastId = 1;
   for (let i = 1; i <= MAX_HISTORY + 5; i++) {
     lastId = i + 1;
-    const entry: HistoryTuple = [lastId, 10 + i, 0, 0];
+    const entry: HistoryTuple = [lastId, 10 + i, 0, 0, 0];
     s = applySnapshot(s!, { v: 1, t: i + 1, s: i, k: 0, n: [entry] });
     assert.ok(s);
   }
