@@ -14,7 +14,9 @@ hosts, comes from here:
 Art filenames carry a hash of their bytes, so they are served `immutable` and a
 viewer downloads each card once; a re-rendered card gets a new name, and the
 short-lived i18n file is what points at it. Unchanged cards keep their name, so
-re-running after one card changes uploads one file per language.
+re-running after one card changes uploads one file per language. Art the live host's
+indexes already name is not encoded at all (it is already there), so a fresh checkout,
+or another machine, does not re-encode every card; --no-live-check turns that off.
 
 Inputs, from the game repo beside this one (the workspace layout):
     CardScreenshots/<code>/<card>.png          renders, one folder per language
@@ -32,13 +34,17 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import sys
-from concurrent.futures import ProcessPoolExecutor
+import time
+import urllib.request
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image
 
 REPO = Path(__file__).resolve().parent.parent
+HOST = "https://cards.atlas-conquest.com/twitch/"
 GAME = REPO.parent / "atlas-conquest"
 
 # Game locale codes, in the game's own order. Folders on the host are lowercase,
@@ -63,6 +69,35 @@ def encode(src: Path) -> bytes:
     return buf.getvalue()
 
 
+# Art paths the live indexes name, so they need no encode or upload. Set per worker.
+LIVE: frozenset[str] = frozenset()
+
+
+def set_live(live: frozenset[str]) -> None:
+    global LIVE
+    LIVE = live
+
+
+def fetch_live(locales: list[str]) -> frozenset[str]:
+    """Every art path the live cards.json and i18n files name. Empty if the host can't be read."""
+    def get(rel: str) -> str:
+        for attempt in range(6):
+            try:
+                req = urllib.request.Request(HOST + rel, headers={"User-Agent": "atlas-build-cdn", "Cache-Control": "no-cache"})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return r.read().decode("utf-8")
+            except Exception as e:
+                if attempt == 5:
+                    print(f"  live check: {rel}: {e}", file=sys.stderr)
+                    return ""
+                time.sleep(2 ** attempt)  # the host rate-limits bursts (429)
+        return ""
+    rels = ["cards.json"] + [f"i18n/{folder(c)}.json" for c in locales]
+    with ThreadPoolExecutor(3) as ex:
+        bodies = list(ex.map(get, rels))
+    return frozenset(m for b in bodies for m in re.findall(r'[\w./-]+\.[0-9a-f]{10}\.webp', b))
+
+
 def build_one(job: tuple[str, str, str]) -> tuple[str, str, str | None]:
     """(card id, render path, out dir) -> (card id, relative art path, error)."""
     card_id, src, out_dir = job
@@ -73,7 +108,7 @@ def build_one(job: tuple[str, str, str]) -> tuple[str, str, str | None]:
         digest = hashlib.sha256(src_p.read_bytes()).hexdigest()[:10]
         name = f"{src_p.stem}.{digest}.webp"
         dest = out_p / name
-        if not dest.exists():
+        if not dest.exists() and f"{out_p.name}/{name}" not in LIVE:
             dest.write_bytes(encode(src_p))
         return card_id, f"{out_p.name}/{name}", None
     except Exception as e:  # one bad render must not sink the whole language
@@ -93,7 +128,7 @@ def encode_square(job: tuple[str, str, int]) -> tuple[str, str, str | None]:
     try:
         digest = hashlib.sha256(src_p.read_bytes()).hexdigest()[:10]
         dest = out_p / f"{src_p.stem}.{digest}.webp"
-        if not dest.exists():
+        if not dest.exists() and f"{out_p.name}/{dest.name}" not in LIVE:
             img = Image.open(src_p).convert("RGBA")
             img.thumbnail((size, size), Image.LANCZOS)
             buf = io.BytesIO()
@@ -134,9 +169,14 @@ def main(argv=None) -> int:
     ap.add_argument("--export", type=Path, default=GAME / "TwitchExport",
                     help="TwitchCardExporter output folder (cards.json, i18n/, tiles/)")
     ap.add_argument("--out", type=Path, default=REPO / "cdn-out" / "twitch")
+    ap.add_argument("--no-live-check", action="store_true",
+                    help="encode every missing file even if the live host already has it")
     args = ap.parse_args(argv)
 
     locales = [c for c in LOCALES if not args.only or c in args.only.split(",")]
+    live = frozenset() if args.no_live_check else fetch_live(LOCALES)
+    set_live(live)
+    print(f"  live check: {len(live)} art files already on the host")
     payload = json.loads((args.export / "cards.json").read_text(encoding="utf-8"))
     cards = payload["cards"]
     args.out.mkdir(parents=True, exist_ok=True)
@@ -155,7 +195,7 @@ def main(argv=None) -> int:
     for png in sorted((args.export / "tiles").glob("*.png")):
         digest = hashlib.sha256(png.read_bytes()).hexdigest()[:10]
         dest = tile_dir / f"{png.stem}.{digest}.webp"
-        if not dest.exists():
+        if not dest.exists() and f"tiles/{dest.name}" not in live:
             img = Image.open(png).convert("RGBA")
             buf = io.BytesIO()
             img.save(buf, "WEBP", quality=QUALITY, method=6)
@@ -164,7 +204,7 @@ def main(argv=None) -> int:
     payload["tileArt"] = tile_art
 
     failed = 0
-    with ProcessPoolExecutor() as pool:
+    with ProcessPoolExecutor(initializer=set_live, initargs=(live,)) as pool:
         # The illustration alone, for history rows: wire id -> path. Not per language.
         artwork = encode_folder(pool, args.export / "artwork", args.out / "artwork", ARTWORK)
         payload["artwork"] = {str(c["id"]): artwork[c["art"]] for c in cards if c["art"] in artwork}
