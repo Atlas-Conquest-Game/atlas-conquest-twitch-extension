@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import {
   parseBroadcasterConfig, DEFAULT_CONFIG, type BroadcasterConfig,
 } from "../../shared/protocol.ts";
-import { resolveLocale, type Locale } from "../../shared/locale.ts";
+import { isLocale, resolveLocale, type Locale } from "../../shared/locale.ts";
+import type { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { loadCards, type CardDatabase } from "./cards.ts";
 
 /**
@@ -42,9 +43,59 @@ export function useBroadcasterConfig(): BroadcasterConfig {
   return config;
 }
 
-/** The language this viewer sees, given the streamer's setting. */
-export function useLocale(config: BroadcasterConfig): Locale {
-  return resolveLocale(config.language, twitchLanguage, twitchLocale);
+/**
+ * The viewer's own language pick, remembered in this browser.
+ *
+ * localStorage in the extension's iframe belongs to the extension's origin, the
+ * same on every channel that runs it, so a pick made on one stream follows the
+ * viewer to the next. Storage can be blocked (private windows, strict settings),
+ * so every access is guarded and the pick then lasts for the page only.
+ */
+const PICK_KEY = "atlas-conquest:language";
+
+function readPick(): Locale | null {
+  try {
+    const v = window.localStorage.getItem(PICK_KEY);
+    return isLocale(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function useViewerLanguage(): [Locale | null, (pick: Locale | null) => void] {
+  const [pick, setPick] = useState<Locale | null>(readPick);
+  const choose = (next: Locale | null) => {
+    setPick(next);
+    try {
+      if (next) window.localStorage.setItem(PICK_KEY, next);
+      else window.localStorage.removeItem(PICK_KEY);
+    } catch {
+      // Not remembered; still applies to this page.
+    }
+  };
+  return [pick, choose];
+}
+
+/** The game's language as the stream reports it. Polled: it changes perhaps once a session. */
+export function useStreamLocale(buffer: SnapshotBuffer): string | null {
+  const [locale, setLocale] = useState<string | null>(buffer.streamLocale);
+  useEffect(() => {
+    const id = window.setInterval(() => setLocale(buffer.streamLocale), 1000);
+    return () => window.clearInterval(id);
+  }, [buffer]);
+  return locale;
+}
+
+/** The language this viewer sees: their pick, the streamer's fixed one, the stream's, then their Twitch language. */
+export function useLocale(config: BroadcasterConfig, stream: string | null, viewer: Locale | null): Locale {
+  return resolveLocale({
+    setting: config.language,
+    viewer,
+    viewerMayChoose: config.languagePicker,
+    stream,
+    twitchLanguage,
+    twitchLocale,
+  });
 }
 
 /**

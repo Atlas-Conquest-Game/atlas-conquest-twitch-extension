@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { DEFAULT_CONFIG, MIN_CARD_SCALE, MAX_CARD_SCALE, type Point } from "../../shared/protocol.ts";
 
 /**
- * Where the deck button and the hovered card sit on the stream, set by dragging
+ * Where the deck button, the language button and the hovered card sit on the stream, set by dragging
  * them around a 16:9 stand-in for the video.
  *
  * On the config page rather than anywhere in OBS: OBS has no channel to an
@@ -17,20 +17,29 @@ import { DEFAULT_CONFIG, MIN_CARD_SCALE, MAX_CARD_SCALE, type Point } from "../.
 
 /** Approximate on-video sizes, as fractions of the video, for the stand-in boxes. */
 const DECK_SIZE: Point = [0.14, 0.075];
+const LANG_SIZE: Point = [0.1, 0.05];
 const CARD_WIDTH = 0.26;     // min(300px, 26%) in the overlay; 26% is the binding term at stream sizes
 const CARD_ASPECT = 840 / 600; // the render's height over width
 
+type Item = "deck" | "language" | "card";
+
 export interface LayoutValue {
   deckPos: Point;
+  languagePos: Point;
   cardPos: "auto" | Point;
   cardScale: number;
 }
 
 export function LayoutEditor({
-  value, onChange,
-}: { value: LayoutValue; onChange: (patch: Partial<LayoutValue>) => void }) {
+  value, show, onChange,
+}: {
+  value: LayoutValue;
+  /** Which buttons are switched on; one that is off is not placed. */
+  show: { deck: boolean; language: boolean };
+  onChange: (patch: Partial<LayoutValue>) => void;
+}) {
   const frame = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ which: "deck" | "card"; pos: Point; grab: Point } | null>(null);
+  const [drag, setDrag] = useState<{ which: Item; pos: Point; grab: Point } | null>(null);
   // The slider previews while it moves and saves once on release.
   const [scale, setScale] = useState<number | null>(null);
   const cardScale = scale ?? value.cardScale;
@@ -40,14 +49,14 @@ export function LayoutEditor({
   };
 
   const cardSize: Point = [CARD_WIDTH * cardScale, CARD_WIDTH * cardScale * CARD_ASPECT * (16 / 9)];
-  const sizeOf = (which: "deck" | "card"): Point => (which === "deck" ? DECK_SIZE : cardSize);
+  const sizeOf = (which: Item): Point => (which === "deck" ? DECK_SIZE : which === "language" ? LANG_SIZE : cardSize);
 
   const fraction = (e: ReactPointerEvent): Point => {
     const r = frame.current!.getBoundingClientRect();
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
   };
 
-  const start = (which: "deck" | "card", pos: Point) => (e: ReactPointerEvent<HTMLDivElement>) => {
+  const start = (which: Item, pos: Point) => (e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     const at = fraction(e);
     setDrag({ which, pos, grab: [at[0] - pos[0], at[1] - pos[1]] });
@@ -66,27 +75,44 @@ export function LayoutEditor({
 
   const end = () => {
     if (!drag) return;
-    onChange(drag.which === "deck" ? { deckPos: drag.pos } : { cardPos: drag.pos });
+    onChange(drag.which === "deck" ? { deckPos: drag.pos }
+      : drag.which === "language" ? { languagePos: drag.pos }
+      : { cardPos: drag.pos });
     setDrag(null);
   };
 
   const deckPos = drag?.which === "deck" ? drag.pos : value.deckPos;
+  const languagePos = drag?.which === "language" ? drag.pos : value.languagePos;
   const cardPos = drag?.which === "card" ? drag.pos : value.cardPos;
 
   return (
     <div className="layout">
       <div className="layout-frame" ref={frame} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
         <span className="layout-caption">Your stream</span>
-        <div
-          className="layout-item layout-deck"
-          data-dragging={drag?.which === "deck"}
-          style={box(deckPos, DECK_SIZE)}
-          onPointerDown={start("deck", value.deckPos)}
-          role="slider"
-          aria-label="Deck button position"
-        >
-          Deck
-        </div>
+        {show.deck && (
+          <div
+            className="layout-item layout-deck"
+            data-dragging={drag?.which === "deck"}
+            style={box(deckPos, DECK_SIZE)}
+            onPointerDown={start("deck", value.deckPos)}
+            role="slider"
+            aria-label="Deck button position"
+          >
+            Deck
+          </div>
+        )}
+        {show.language && (
+          <div
+            className="layout-item layout-deck layout-lang"
+            data-dragging={drag?.which === "language"}
+            style={box(languagePos, LANG_SIZE)}
+            onPointerDown={start("language", value.languagePos)}
+            role="slider"
+            aria-label="Language button position"
+          >
+            文A
+          </div>
+        )}
         {cardPos !== "auto" && (
           <div
             className="layout-item layout-card"
@@ -140,7 +166,10 @@ export function LayoutEditor({
         <button
           type="button"
           className="layout-reset"
-          onClick={() => onChange({ deckPos: DEFAULT_CONFIG.deckPos, cardPos: DEFAULT_CONFIG.cardPos, cardScale: DEFAULT_CONFIG.cardScale })}
+          onClick={() => onChange({
+            deckPos: DEFAULT_CONFIG.deckPos, languagePos: DEFAULT_CONFIG.languagePos,
+            cardPos: DEFAULT_CONFIG.cardPos, cardScale: DEFAULT_CONFIG.cardScale,
+          })}
         >
           Reset layout
         </button>

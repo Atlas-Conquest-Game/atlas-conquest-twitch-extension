@@ -23,6 +23,10 @@ export interface Strings {
   deckCode: string;
   waiting: string;
   hidden: string;
+  /** The language button's label. */
+  language: string;
+  /** The language menu's first entry: follow the stream (or the streamer's fixed language). */
+  matchStream: string;
 }
 
 const STRINGS: Record<Locale, Strings> = {
@@ -39,6 +43,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Deck code",
     waiting: "The deck appears here when the streamer starts a match.",
     hidden: "The streamer has hidden their deck.",
+    language: "Card language",
+    matchStream: "Match the stream",
   },
   de: {
     viewDeck: "Deck ansehen",
@@ -53,6 +59,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Deck-Code",
     waiting: "Das Deck erscheint hier, sobald der Streamer ein Match beginnt.",
     hidden: "Der Streamer hat sein Deck ausgeblendet.",
+    language: "Kartensprache",
+    matchStream: "Wie im Stream",
   },
   "es-419": {
     viewDeck: "Ver mazo",
@@ -67,6 +75,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Código del mazo",
     waiting: "El mazo aparecerá aquí cuando el streamer empiece una partida.",
     hidden: "El streamer ocultó su mazo.",
+    language: "Idioma de las cartas",
+    matchStream: "Igual que la transmisión",
   },
   fr: {
     viewDeck: "Voir le deck",
@@ -81,6 +91,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Code du deck",
     waiting: "Le deck apparaîtra ici quand le streamer lancera une partie.",
     hidden: "Le streamer a masqué son deck.",
+    language: "Langue des cartes",
+    matchStream: "Comme le stream",
   },
   it: {
     viewDeck: "Vedi mazzo",
@@ -95,6 +107,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Codice del mazzo",
     waiting: "Il mazzo apparirà qui quando lo streamer inizierà una partita.",
     hidden: "Lo streamer ha nascosto il suo mazzo.",
+    language: "Lingua delle carte",
+    matchStream: "Come nella diretta",
   },
   ja: {
     viewDeck: "デッキを見る",
@@ -109,6 +123,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "デッキコード",
     waiting: "配信者が対戦を始めると、ここにデッキが表示されます。",
     hidden: "配信者はデッキを非表示にしています。",
+    language: "カードの言語",
+    matchStream: "配信に合わせる",
   },
   ko: {
     viewDeck: "덱 보기",
@@ -123,6 +139,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "덱 코드",
     waiting: "스트리머가 대전을 시작하면 여기에 덱이 표시됩니다.",
     hidden: "스트리머가 덱을 숨겼습니다.",
+    language: "카드 언어",
+    matchStream: "방송과 같게",
   },
   pl: {
     viewDeck: "Zobacz talię",
@@ -137,6 +155,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Kod talii",
     waiting: "Talia pojawi się tutaj, gdy streamer rozpocznie mecz.",
     hidden: "Streamer ukrył swoją talię.",
+    language: "Język kart",
+    matchStream: "Jak na streamie",
   },
   "pt-BR": {
     viewDeck: "Ver baralho",
@@ -151,6 +171,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Código do baralho",
     waiting: "O baralho aparece aqui quando o streamer começar uma partida.",
     hidden: "O streamer ocultou o baralho.",
+    language: "Idioma das cartas",
+    matchStream: "Igual à transmissão",
   },
   ru: {
     viewDeck: "Открыть колоду",
@@ -165,6 +187,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "Код колоды",
     waiting: "Колода появится здесь, когда стример начнёт матч.",
     hidden: "Стример скрыл свою колоду.",
+    language: "Язык карт",
+    matchStream: "Как на стриме",
   },
   "zh-CN": {
     viewDeck: "查看卡组",
@@ -179,6 +203,8 @@ const STRINGS: Record<Locale, Strings> = {
     deckCode: "卡组代码",
     waiting: "主播开始对局后，卡组会显示在这里。",
     hidden: "主播隐藏了卡组。",
+    language: "卡牌语言",
+    matchStream: "与直播一致",
   },
 };
 

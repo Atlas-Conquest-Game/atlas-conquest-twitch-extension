@@ -98,9 +98,24 @@ function Config() {
     <div className="config">
       <h1>Atlas Conquest overlay</h1>
       <p className="muted">
-        Changes save automatically. They apply to viewers the next time the
-        overlay loads.
+        Changes save automatically and reach viewers when their overlay next
+        loads. Reload your channel page to check one.
       </p>
+
+      <section>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={config.boardHover}
+            onChange={(e) => update({ boardHover: e.target.checked })}
+          />
+          <span>Show the overlay</span>
+        </label>
+        <p className="help">
+          Viewers hover your board, your hand or the action history to read any
+          card in full. Turn this off to hide everything without uninstalling.
+        </p>
+      </section>
 
       <section>
         <label htmlFor="delay">
@@ -119,13 +134,10 @@ function Config() {
           <span>0s</span><span>{MAX_DELAY_MS / 1000}s</span>
         </div>
         <p className="help">
-          Your viewers see the stream a few seconds after it happens. This tells
-          the overlay how far to hold its data back so the two line up.
-          <br />
-          <strong>If hover targets sit ahead of the video, increase this.</strong>{" "}
-          If they lag behind it, decrease. Setting it slightly high is harmless;
-          setting it too low is what looks broken. Twitch's Stream Manager shows
-          your actual delay, and 4&ndash;6 seconds is typical.
+          Lines the overlay up with your video, which reaches viewers a few
+          seconds late. <strong>If hover targets move before the video does,
+          increase it</strong>; if after, decrease it. 4&ndash;6 seconds is
+          typical, and Twitch's Stream Manager shows yours.
         </p>
       </section>
 
@@ -133,14 +145,15 @@ function Config() {
         <label className="row">
           <input
             type="checkbox"
-            checked={config.boardHover}
-            onChange={(e) => update({ boardHover: e.target.checked })}
+            checked={config.history}
+            onChange={(e) => update({ history: e.target.checked })}
           />
-          <span>Let viewers hover characters on the board</span>
+          <span>Interactive action history</span>
         </label>
         <p className="help">
-          Turn this off to hide the overlay entirely without uninstalling the
-          extension.
+          Covers your action history with a copy viewers can scroll, hover and
+          click to see each card played or ability used. Turn it off to leave
+          your own list showing.
         </p>
       </section>
 
@@ -151,17 +164,13 @@ function Config() {
             checked={config.deckLink}
             onChange={(e) => update({ deckLink: e.target.checked })}
           />
-          <span>Show a link to your deck</span>
+          <span>Deck button</span>
         </label>
         <p className="help">
-          Puts your deck's name on the stream, linking to it on
-          atlas-conquest.com. Worth knowing that the link resolves to your full
-          decklist, so an opponent watching your stream can read it too. Fine for
-          most streams; turn it off for tournament play.
+          Your deck's name, with buttons to copy its link or open it on
+          atlas-conquest.com. The link shows your full decklist, so turn this off
+          for tournament play.
         </p>
-      </section>
-
-      <section>
         <span className="label">On mobile, show</span>
         <label className="row">
           <input
@@ -179,13 +188,11 @@ function Config() {
             checked={config.deckView === "code"}
             onChange={() => update({ deckView: "code" })}
           />
-          <span>Just the deck code</span>
+          <span>Just the deck link</span>
         </label>
         <p className="help">
-          Mobile viewers can't hover, so they get a deck panel below the video
-          instead. Either way they can copy your deck link with one tap, paste it
-          into the game, or open it on atlas-conquest.com. The deck code is that
-          link, the same one the game copies.
+          Phones can't hover, so mobile viewers get a deck panel below the video
+          instead, with the same copy and open buttons.
         </p>
       </section>
 
@@ -196,59 +203,54 @@ function Config() {
           value={config.language}
           onChange={(e) => {
             const value = e.target.value;
-            update({ language: value === "auto" || !isLocale(value) ? "auto" : value });
+            update({ language: isLocale(value) ? value : "game" });
           }}
         >
-          <option value="auto">Each viewer's Twitch language</option>
+          <option value="game">Same as your game</option>
           {LOCALES.map((code) => (
             <option key={code} value={code}>{NATIVE_NAMES[code]}</option>
           ))}
         </select>
-        <p className="help">
-          Cards, card names and the extension's buttons, in any of the game's
-          eleven languages. The default follows each viewer's own Twitch
-          language and uses English where the game has no translation; pick a
-          language to show everyone the same one.
-        </p>
-      </section>
-
-      <section>
         <label className="row">
           <input
             type="checkbox"
-            checked={config.history}
-            onChange={(e) => update({ history: e.target.checked })}
+            checked={config.languagePicker}
+            onChange={(e) => update({ languagePicker: e.target.checked })}
           />
-          <span>Interactive action history</span>
+          <span>Language button for viewers</span>
         </label>
         <p className="help">
-          Draws a readable copy of your action history over the one on screen, so
-          viewers can scroll it and hover or click an entry to see the card. Turn it
-          off to leave your own list visible instead.
+          Cards, reminders and buttons in any of the game's eleven languages. By
+          default they match your game. With the language button on, each viewer
+          can pick their own, and it's remembered on every stream that runs the
+          extension.
         </p>
       </section>
 
       <section>
         <span className="label">Layout</span>
         <p className="help">
-          Drag the deck button to where it fits your scene, and choose where the
-          hovered card appears. Viewers' overlays follow as soon as you let go, so you
-          can adjust while live and check it on your stream.
+          Drag the deck and language buttons to where they fit your scene, and
+          choose where hovered cards appear.
         </p>
         <LayoutEditor
-          value={{ deckPos: config.deckPos, cardPos: config.cardPos, cardScale: config.cardScale }}
+          value={{
+            deckPos: config.deckPos, languagePos: config.languagePos,
+            cardPos: config.cardPos, cardScale: config.cardScale,
+          }}
+          show={{ deck: config.deckLink, language: config.languagePicker }}
           onChange={(patch) => update(patch)}
         />
       </section>
 
       <p className="muted small">
-        {saved ? "Saved." : connected ? " " : "Not connected to Twitch — changes cannot be saved from here."}
+        {saved ? "Saved." : connected ? " " : "Not connected to Twitch, so changes can't be saved from here."}
       </p>
 
       <hr />
       <p className="muted small">
-        The overlay only ever shows your own information. Your opponent's hand is
-        never sent to your game, so there is nothing here that could reveal it.
+        The overlay only shows your own information. Your opponent's hand never
+        reaches your game, so there's nothing for it to reveal.
       </p>
     </div>
   );

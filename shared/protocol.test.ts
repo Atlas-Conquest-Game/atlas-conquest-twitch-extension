@@ -280,7 +280,7 @@ test("deck view and language are kept when valid and defaulted when not", () => 
   // "pt" is a Twitch language, not a game locale; a stored value must be one of ours.
   const bad = JSON.stringify({ deckView: "grid", language: "pt" });
   assert.equal(parseBroadcasterConfig(bad).deckView, DEFAULT_CONFIG.deckView);
-  assert.equal(parseBroadcasterConfig(bad).language, "auto");
+  assert.equal(parseBroadcasterConfig(bad).language, "game");
 });
 
 test("implausible delays are clamped rather than trusted", () => {
@@ -418,4 +418,14 @@ test("the history rect carries forward between keyframes", () => {
   assert.ok(s);
   assert.deepEqual(s.historyRect, [0.9, 0.2, 0.06, 0.6],
     "a delta without a rect must not blank the panel");
+});
+
+test("the language button and its position parse field by field", () => {
+  const c = parseBroadcasterConfig(JSON.stringify({ languagePicker: false, languagePos: [0.5, 0.25], language: "auto" }));
+  assert.equal(c.languagePicker, false);
+  assert.deepEqual(c.languagePos, [0.5, 0.25]);
+  assert.equal(c.language, "game", "a retired value falls back to the default");
+  const d = parseBroadcasterConfig(JSON.stringify({ languagePicker: "yes", languagePos: "x" }));
+  assert.equal(d.languagePicker, DEFAULT_CONFIG.languagePicker);
+  assert.deepEqual(d.languagePos, DEFAULT_CONFIG.languagePos);
 });

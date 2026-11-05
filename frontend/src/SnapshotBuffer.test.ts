@@ -154,3 +154,13 @@ test("a new match after leaving shows the new board, not the old one", () => {
   assert.equal(state.entities.has(1), false);
   assert.equal(state.entities.get(3)?.[1], 9);
 });
+
+test("the stream's language is the newest keyframe's, whatever order they arrive in", () => {
+  const b = new SnapshotBuffer(0);
+  assert.equal(b.streamLocale, null, "unknown before the first keyframe");
+  b.ingest({ ...keyframe(2000, 2), lg: "ja" }, 2000);
+  b.ingest({ ...keyframe(1000, 1), lg: "de" }, 2100);
+  assert.equal(b.streamLocale, "ja", "a late older keyframe does not win");
+  b.ingest({ ...keyframe(3000, 3), lg: "fr" }, 3000);
+  assert.equal(b.streamLocale, "fr", "the streamer switching language mid-stream is followed");
+});

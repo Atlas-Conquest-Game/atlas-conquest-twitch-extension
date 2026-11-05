@@ -161,3 +161,9 @@ select {
   color: inherit;
   cursor: pointer;
 }
+.layout-lang { font-size: 13px; white-space: nowrap; overflow: hidden; }
+
+/* A second control in a section (the mobile view under the deck button, the
+   language button under the language menu) needs air above it. */
+.help + .label { margin-top: 14px; }
+select + .row { margin-top: 12px; }

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Overlay } from "./Overlay.tsx";
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { stringsFor } from "./strings.ts";
-import { useBroadcasterConfig, useCards, useLocale } from "./twitch.ts";
+import { useBroadcasterConfig, useCards, useLocale, useStreamLocale, useViewerLanguage } from "./twitch.ts";
 import type { Snapshot } from "../../shared/protocol.ts";
 import "./overlay.css";
 
@@ -13,7 +13,9 @@ function App() {
   // Broadcaster settings come from Twitch's Configuration Service, which is
   // free and hosted by them -- our EBS never sees or stores them.
   const config = useBroadcasterConfig();
-  const locale = useLocale(config);
+  const stream = useStreamLocale(buffer);
+  const [pick, setPick] = useViewerLanguage();
+  const locale = useLocale(config, stream, pick);
   const cards = useCards(locale);
 
   useEffect(() => { buffer.setDelay(config.delayMs); }, [config.delayMs]);
@@ -40,6 +42,9 @@ function App() {
       showDeckLink={config.deckLink}
       showHistory={config.history}
       layout={{ deckPos: config.deckPos, cardPos: config.cardPos, cardScale: config.cardScale }}
+      language={config.languagePicker
+        ? { current: locale, pick, onPick: setPick, pos: config.languagePos }
+        : null}
     />
   );
 }

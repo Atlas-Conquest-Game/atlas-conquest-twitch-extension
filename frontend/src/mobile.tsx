@@ -4,7 +4,8 @@ import { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { cardTextToHtml, reminderHtml, resolveDeck, type CardData, type CardDatabase } from "./cards.ts";
 import { DeckActions } from "./DeckActions.tsx";
 import { stringsFor, type Strings } from "./strings.ts";
-import { useBroadcasterConfig, useCards, useLocale, useTheme } from "./twitch.ts";
+import { useBroadcasterConfig, useCards, useLocale, useStreamLocale, useTheme, useViewerLanguage } from "./twitch.ts";
+import { LanguagePicker } from "./LanguagePicker.tsx";
 import { decodeDeckCode, deckCodeFromUrl } from "../../shared/deckcode.ts";
 import type { DeckLink, DeckView, Snapshot } from "../../shared/protocol.ts";
 import "./mobile.css";
@@ -55,7 +56,9 @@ function useDeck(delayMs: number): DeckLink | null {
 
 function App() {
   const config = useBroadcasterConfig();
-  const locale = useLocale(config);
+  const stream = useStreamLocale(buffer);
+  const [pick, setPick] = useViewerLanguage();
+  const locale = useLocale(config, stream, pick);
   const cards = useCards(locale);
   const theme = useTheme();
   const deck = useDeck(config.delayMs);
@@ -66,7 +69,14 @@ function App() {
   else if (!deck || !cards) body = <p className="m-empty">{t.waiting}</p>;
   else body = <DeckPanel deck={deck} cards={cards} t={t} view={config.deckView} />;
 
-  return <main className="m-root" data-theme={theme} lang={locale}>{body}</main>;
+  return (
+    <main className="m-root" data-theme={theme} lang={locale}>
+      {body}
+      {config.languagePicker && (
+        <LanguagePicker current={locale} pick={pick} onPick={setPick} t={t} openUp className="ac-lang m-lang" />
+      )}
+    </main>
+  );
 }
 
 function DeckPanel({

@@ -11,8 +11,8 @@ export const LOCALES = [
 
 export type Locale = typeof LOCALES[number];
 
-/** What the streamer picks: follow each viewer's Twitch language, or force one. */
-export type LanguageSetting = "auto" | Locale;
+/** What the streamer picks: the game's language as the stream shows it, or one fixed language. */
+export type LanguageSetting = "game" | Locale;
 
 /** Each language's name in itself, for the settings menu. */
 export const NATIVE_NAMES: Record<Locale, string> = {
@@ -61,11 +61,24 @@ export function matchTwitchLanguage(language?: string | null, locale?: string | 
   return LOCALES.find((l) => l === base) ?? "en";
 }
 
-/** The language to render, given the streamer's setting and the viewer's Twitch language. */
-export function resolveLocale(
-  setting: LanguageSetting,
-  twitchLanguage?: string | null,
-  twitchLocale?: string | null,
-): Locale {
-  return setting === "auto" ? matchTwitchLanguage(twitchLanguage, twitchLocale) : setting;
+/**
+ * The language to render, most specific first:
+ *
+ *  1. the viewer's own pick, when the streamer lets viewers choose;
+ *  2. the streamer's fixed language, if they set one;
+ *  3. the game's language as the stream shows it (sent with every keyframe);
+ *  4. the viewer's Twitch language, until the first keyframe says otherwise.
+ */
+export function resolveLocale(opts: {
+  setting: LanguageSetting;
+  viewer?: string | null;
+  viewerMayChoose?: boolean;
+  stream?: string | null;
+  twitchLanguage?: string | null;
+  twitchLocale?: string | null;
+}): Locale {
+  if (opts.viewerMayChoose !== false && isLocale(opts.viewer)) return opts.viewer;
+  if (opts.setting !== "game") return opts.setting;
+  if (isLocale(opts.stream)) return opts.stream;
+  return matchTwitchLanguage(opts.twitchLanguage, opts.twitchLocale);
 }

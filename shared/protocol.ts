@@ -177,6 +177,8 @@ export interface Snapshot {
   /** Streamer's deck link. Keyframes only: a deck cannot change mid-match, so
    *  re-sending it in every delta would spend wire budget on a constant. */
   d?: DeckLink;
+  /** The game's language (e.g. "ja"), on keyframes. Untrusted: checked with isLocale before use. */
+  lg?: string;
 
   /** Hand cards added or moved. On a keyframe, the whole hand. */
   h?: HandTuple[];
@@ -387,10 +389,15 @@ export interface BroadcasterConfig {
    */
   deckView: DeckView;
   /**
-   * Card language. "auto" follows each viewer's Twitch language, falling back to
-   * English for languages the game does not ship.
+   * Card language. "game" shows cards in the language the streamer's game is in;
+   * otherwise one fixed language. Either way a viewer can pick their own when
+   * `languagePicker` is on.
    */
   language: LanguageSetting;
+  /** Whether viewers get a language button to read cards in a language of their choosing. */
+  languagePicker: boolean;
+  /** Top-left of the language button, as fractions of the video. */
+  languagePos: Point;
   /**
    * Top-left of the deck button, as fractions of the video (0..1 across, 0..1
    * down). Streamers lay out their scenes differently, so it is theirs to place.
@@ -419,9 +426,12 @@ export const DEFAULT_CONFIG: BroadcasterConfig = {
   deckLink: true,
   history: true,
   deckView: "list",
-  language: "auto",
+  language: "game",
+  languagePicker: true,
   // Just below the opponent's stat panel at the left edge, clear of both HUDs.
   deckPos: [0.022, 0.545],
+  // Directly under the deck button.
+  languagePos: [0.022, 0.695],
   cardPos: "auto",
   cardScale: 1,
 };
@@ -456,9 +466,11 @@ export function parseBroadcasterConfig(raw: string | undefined | null): Broadcas
     history: typeof source.history === "boolean" ? source.history : DEFAULT_CONFIG.history,
     deckView: source.deckView === "list" || source.deckView === "code"
       ? source.deckView : DEFAULT_CONFIG.deckView,
-    language: source.language === "auto" || isLocale(source.language)
+    language: source.language === "game" || isLocale(source.language)
       ? source.language : DEFAULT_CONFIG.language,
+    languagePicker: typeof source.languagePicker === "boolean" ? source.languagePicker : DEFAULT_CONFIG.languagePicker,
     deckPos: parsePoint(source.deckPos) ?? DEFAULT_CONFIG.deckPos,
+    languagePos: parsePoint(source.languagePos) ?? DEFAULT_CONFIG.languagePos,
     cardPos: source.cardPos === "auto" ? "auto" : parsePoint(source.cardPos) ?? DEFAULT_CONFIG.cardPos,
     cardScale: typeof source.cardScale === "number" && Number.isFinite(source.cardScale)
       ? Math.min(Math.max(source.cardScale, MIN_CARD_SCALE), MAX_CARD_SCALE)

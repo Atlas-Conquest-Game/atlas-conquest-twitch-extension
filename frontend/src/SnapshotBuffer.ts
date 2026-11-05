@@ -23,6 +23,10 @@ export class SnapshotBuffer {
   private skewSamples: number[] = [];
   private skew = 0;
 
+  /** The game's language from the newest keyframe that carried one, and its stamp. */
+  private locale: string | null = null;
+  private localeAt = -Infinity;
+
   /** How far behind live to render, in ms. Broadcaster-configured. */
   private delayMs: number;
 
@@ -55,6 +59,13 @@ export class SnapshotBuffer {
     this.skewSamples.push(arrivedAt - snap.t);
     if (this.skewSamples.length > 21) this.skewSamples.shift();
     this.skew = estimateClockSkew(this.skewSamples);
+
+    // Not delay-aligned: it changes perhaps once a session, and showing the new
+    // language a few seconds early is harmless.
+    if (typeof snap.lg === "string" && snap.t >= this.localeAt) {
+      this.locale = snap.lg;
+      this.localeAt = snap.t;
+    }
 
     if (snap.m?.length) {
       this.intervals = mergeIntervals(this.intervals, snap.m, snap.t);
@@ -169,5 +180,7 @@ export class SnapshotBuffer {
   }
 
   get clockSkewMs() { return this.skew; }
+  /** The stream's language as the game last reported it, or null before the first keyframe. */
+  get streamLocale() { return this.locale; }
   get size() { return this.snapshots.length; }
 }

@@ -23,9 +23,17 @@ test("unsupported or missing languages are English", () => {
   assert.equal(matchTwitchLanguage("", ""), "en");
 });
 
-test("a forced language overrides the viewer's", () => {
-  assert.equal(resolveLocale("ko", "de", "de-DE"), "ko");
-  assert.equal(resolveLocale("auto", "de", "de-DE"), "de");
+test("the stream's language by default, the viewer's Twitch language until it is known", () => {
+  assert.equal(resolveLocale({ setting: "game", stream: "ja", twitchLanguage: "de" }), "ja");
+  assert.equal(resolveLocale({ setting: "game", stream: null, twitchLanguage: "de", twitchLocale: "de-DE" }), "de");
+  assert.equal(resolveLocale({ setting: "game", stream: "xx", twitchLanguage: "fr" }), "fr", "an unknown game code is ignored");
+});
+
+test("a fixed language beats the stream's; the viewer's pick beats both, unless picking is off", () => {
+  assert.equal(resolveLocale({ setting: "ko", stream: "ja" }), "ko");
+  assert.equal(resolveLocale({ setting: "ko", stream: "ja", viewer: "pl" }), "pl");
+  assert.equal(resolveLocale({ setting: "game", stream: "ja", viewer: "pl", viewerMayChoose: false }), "ja");
+  assert.equal(resolveLocale({ setting: "game", stream: "ja", viewer: "nope" }), "ja", "a garbled saved pick is ignored");
 });
 
 test("host folders are lowercase", () => {

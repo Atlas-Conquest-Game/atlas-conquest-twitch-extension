@@ -6,6 +6,8 @@ import {
 import { SnapshotBuffer } from "./SnapshotBuffer.ts";
 import { cardTextToHtml, reminderHtml, type AbilityInfo, type CardDatabase, type CardData } from "./cards.ts";
 import { DeckActions } from "./DeckActions.tsx";
+import { LanguagePicker } from "./LanguagePicker.tsx";
+import type { Locale } from "../../shared/locale.ts";
 import type { Strings } from "./strings.ts";
 
 interface Props {
@@ -19,6 +21,15 @@ interface Props {
   showHistory: boolean;
   /** Streamer's layout: where the deck button and the hovered card go, and card size. */
   layout: Layout;
+  /** The viewer's language button, or null when the streamer has it off. */
+  language: LanguageButton | null;
+}
+
+export interface LanguageButton {
+  current: Locale;
+  pick: Locale | null;
+  onPick: (pick: Locale | null) => void;
+  pos: Point;
 }
 
 export interface Layout {
@@ -72,13 +83,15 @@ function rectToCss(r: Rect) {
  * snapshot. A pan that ends between two messages still has to release the
  * hitboxes at the right moment.
  */
-export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }: Props) {
+export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout, language }: Props) {
   const [hits, setHits] = useState<Hit[]>([]);
   const [handHits, setHandHits] = useState<HandHit[]>([]);
   const [history, setHistory] = useState<HistoryTuple[]>([]);
   const [historyRect, setHistoryRect] = useState<Rect | null>(null);
   const [deck, setDeck] = useState<DeckLink | null>(null);
   const [moving, setMoving] = useState(false);
+  /** In a match, as of the frame on screen. The language button only shows then, like the deck button. */
+  const [live, setLive] = useState(false);
   const [hovered, setHovered] = useState<Target | null>(null);
   const [pinned, setPinned] = useState<Target | null>(null);
   const hover = (key: Target) => setHovered(key);
@@ -92,6 +105,7 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }:
       const state = buffer.stateAt(now);
       const isMoving = buffer.cameraMoving(now);
       setMoving(isMoving);
+      setLive(state !== null);
 
       // Deliberately outside the isMoving branch below. The deck button is
       // anchored to the player's HUD, not to the board, so panning the camera
@@ -238,6 +252,17 @@ export function Overlay({ buffer, cards, t, showDeckLink, showHistory, layout }:
       )}
 
       {showDeckLink && deck && <DeckButton deck={deck} t={t} pos={layout.deckPos} />}
+
+      {language && live && (
+        <LanguagePicker
+          current={language.current}
+          pick={language.pick}
+          onPick={language.onPick}
+          t={t}
+          openUp={language.pos[1] > 0.55}
+          style={{ left: `${language.pos[0] * 100}%`, top: `${language.pos[1] * 100}%` }}
+        />
+      )}
 
       {showingHit && (
         <CardPanel

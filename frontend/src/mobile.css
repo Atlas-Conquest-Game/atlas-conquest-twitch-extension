@@ -254,3 +254,23 @@ body, .m-root {
 .ac-icon[data-icon="durability"] { background: #5b5f66; }
 .ac-icon[data-icon="intellect"] { background: #2b4f86; }
 .ac-icon[data-icon="dominion"] { background: #6a3fc9; }
+
+/* The language button, as a row at the foot of the panel (shares overlay.css's look). */
+.m-lang { position: relative; margin: 14px 0 4px; font-size: 14px; }
+.m-lang .ac-lang-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px;
+  background: var(--m-surface, rgba(255, 255, 255, 0.06)); border: 1px solid rgba(127, 127, 127, 0.35);
+  color: inherit; font: inherit;
+}
+.m-lang .ac-lang-glyph { font-weight: 700; }
+.m-lang .ac-lang-menu {
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 5; margin: 0; padding: 6px;
+  list-style: none; max-height: 60vh; overflow-y: auto; border-radius: 10px;
+  background: var(--m-bg, #18151f); border: 1px solid rgba(127, 127, 127, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.m-lang .ac-lang-menu button {
+  display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: none;
+  color: inherit; font: inherit; text-align: left;
+}
+.m-lang .ac-lang-menu button[aria-selected="true"] { font-weight: 700; }
