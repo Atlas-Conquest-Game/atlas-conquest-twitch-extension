@@ -118,6 +118,14 @@ body, .m-root {
   margin-bottom: 12px;
 }
 
+/* Copy only (links can't open from the phone apps): one wide button, and where to paste. */
+.ac-paste-hint {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--m-muted);
+}
+
 .ac-btn {
   flex: 1 1 auto;
   white-space: nowrap;

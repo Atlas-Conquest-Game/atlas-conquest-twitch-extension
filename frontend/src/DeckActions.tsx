@@ -10,14 +10,20 @@ import type { Strings } from "./strings.ts";
  * Opening is a real anchor with target="_blank": an extension iframe cannot
  * navigate the page it sits in, and Twitch requires a visible indicator that a
  * link leaves the site, which the arrow provides.
+ *
+ * The Twitch iPhone app ignores links from extensions (tested: target="_blank",
+ * with or without rel, the domain on the panel URL allowlist), so the mobile
+ * panel passes canOpen={false}: copy only, with a line saying where to paste.
  */
 export function DeckActions({
-  url, t, compact = false, onCopyFailed,
+  url, t, compact = false, canOpen = true, onCopyFailed,
 }: {
   url: string;
   t: Strings;
   /** Short labels, for the overlay button that sits on the video. */
   compact?: boolean;
+  /** False where links can't open: copy becomes the only button. */
+  canOpen?: boolean;
   /** Called when the clipboard is unavailable, so the caller can expose the link. */
   onCopyFailed?: () => void;
 }) {
@@ -38,13 +44,18 @@ export function DeckActions({
   };
 
   return (
-    <div className="ac-deck-actions">
-      <button type="button" className="ac-btn" onClick={copy} aria-live="polite">
+    <div className="ac-deck-actions" data-copy-only={!canOpen}>
+      <button type="button" className={canOpen ? "ac-btn" : "ac-btn ac-btn-primary"} onClick={copy}
+              aria-live="polite">
         {status === "copied" ? t.copied : status === "failed" ? t.copyFailed : compact ? t.copy : t.copyLink}
       </button>
-      <a className="ac-btn ac-btn-primary" href={url} target="_blank" rel="noopener noreferrer">
-        {compact ? t.viewDeck : t.openSite} <ExternalIcon />
-      </a>
+      {canOpen ? (
+        <a className="ac-btn ac-btn-primary" href={url} target="_blank" rel="noopener noreferrer">
+          {compact ? t.viewDeck : t.openSite} <ExternalIcon />
+        </a>
+      ) : (
+        <p className="ac-paste-hint">{t.pasteHint}</p>
+      )}
     </div>
   );
 }

@@ -17,6 +17,8 @@ export interface Strings {
   copied: string;
   copyFailed: string;
   openSite: string;
+  /** Under the copy button where links can't open (the phone apps). */
+  pasteHint: string;
   cards: string;
   commander: string;
   close: string;
@@ -37,6 +39,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Copied to clipboard",
     copyFailed: "Press and hold the link to copy it",
     openSite: "Open on the website",
+    pasteHint: "Paste it into your browser or the game to open the deck.",
     cards: "Cards",
     commander: "Commander",
     close: "Close",
@@ -53,6 +56,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "In die Zwischenablage kopiert",
     copyFailed: "Halte den Link gedrückt, um ihn zu kopieren",
     openSite: "Auf der Website öffnen",
+    pasteHint: "Füge ihn im Browser oder im Spiel ein, um das Deck zu öffnen.",
     cards: "Karten",
     commander: "Kommandant",
     close: "Schließen",
@@ -69,6 +73,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Copiado al portapapeles",
     copyFailed: "Mantén presionado el enlace para copiarlo",
     openSite: "Abrir en el sitio web",
+    pasteHint: "Pégalo en tu navegador o en el juego para abrir el mazo.",
     cards: "Cartas",
     commander: "Comandante",
     close: "Cerrar",
@@ -85,6 +90,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Copié dans le presse-papiers",
     copyFailed: "Appuyez longuement sur le lien pour le copier",
     openSite: "Ouvrir sur le site",
+    pasteHint: "Collez-le dans votre navigateur ou dans le jeu pour ouvrir le deck.",
     cards: "Cartes",
     commander: "Commandant",
     close: "Fermer",
@@ -101,6 +107,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Copiato negli appunti",
     copyFailed: "Tieni premuto il link per copiarlo",
     openSite: "Apri sul sito",
+    pasteHint: "Incollalo nel browser o nel gioco per aprire il mazzo.",
     cards: "Carte",
     commander: "Comandante",
     close: "Chiudi",
@@ -117,6 +124,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "クリップボードにコピーしました",
     copyFailed: "リンクを長押ししてコピーしてください",
     openSite: "ウェブサイトで開く",
+    pasteHint: "ブラウザまたはゲームに貼り付けるとデッキを開けます。",
     cards: "カード",
     commander: "指揮官",
     close: "閉じる",
@@ -133,6 +141,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "클립보드에 복사했습니다",
     copyFailed: "링크를 길게 눌러 복사하세요",
     openSite: "웹사이트에서 열기",
+    pasteHint: "브라우저나 게임에 붙여 넣으면 덱을 열 수 있습니다.",
     cards: "카드",
     commander: "사령관",
     close: "닫기",
@@ -149,6 +158,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Skopiowano do schowka",
     copyFailed: "Przytrzymaj link, aby go skopiować",
     openSite: "Otwórz na stronie",
+    pasteHint: "Wklej go w przeglądarce lub w grze, aby otworzyć talię.",
     cards: "Karty",
     commander: "Dowódca",
     close: "Zamknij",
@@ -165,6 +175,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Copiado para a área de transferência",
     copyFailed: "Toque e segure o link para copiá-lo",
     openSite: "Abrir no site",
+    pasteHint: "Cole no navegador ou no jogo para abrir o baralho.",
     cards: "Cartas",
     commander: "Comandante",
     close: "Fechar",
@@ -181,6 +192,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "Скопировано в буфер обмена",
     copyFailed: "Нажмите и удерживайте ссылку, чтобы скопировать",
     openSite: "Открыть на сайте",
+    pasteHint: "Вставьте её в браузер или в игру, чтобы открыть колоду.",
     cards: "Карты",
     commander: "Командир",
     close: "Закрыть",
@@ -197,6 +209,7 @@ const STRINGS: Record<Locale, Strings> = {
     copied: "已复制到剪贴板",
     copyFailed: "长按链接即可复制",
     openSite: "在网站上打开",
+    pasteHint: "粘贴到浏览器或游戏中即可打开卡组。",
     cards: "卡牌",
     commander: "指挥官",
     close: "关闭",

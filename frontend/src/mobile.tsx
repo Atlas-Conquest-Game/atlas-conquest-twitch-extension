@@ -115,7 +115,7 @@ function DeckPanel({
         </label>
       )}
 
-      <DeckActions url={resolved.url} t={t} onCopyFailed={() => setShowLink(true)} />
+      <DeckActions url={resolved.url} t={t} canOpen={false} onCopyFailed={() => setShowLink(true)} />
 
       {view === "list" && (
         <ul className="m-list">
